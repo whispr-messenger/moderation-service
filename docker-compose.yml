@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  efficientnet_lite:
+    build: .
+    container_name: efficientnet_lite_app
+    command: python src/efficientnet_lite/main.py
+    volumes:
+      - ./src:/app/src
+    environment:
+      - IMAGE_PATH=/app/src/efficientnet_lite/test.png
+      - CUDA_VISIBLE_DEVICES=""
+    ports:
+      - "8000:8000"
