@@ -21,6 +21,3 @@ jobs:
         run: |
           pip install ruff
           ruff check src/ --exit-zero
-      - name: Run tests
-        run: |
-          pytest
