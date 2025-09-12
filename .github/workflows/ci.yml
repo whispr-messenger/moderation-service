@@ -20,7 +20,7 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff src/
+          ruff check src/
       - name: Run tests
         run: |
           pytest
