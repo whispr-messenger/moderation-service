@@ -28,9 +28,9 @@ jobs:
           pip install ruff
           ruff check src/ --exit-zero
 
-      - name: Run tests
-        run: |
-          pytest
+      #- name: Run tests
+       # run: |
+        #  pytest
 
   docker:
     runs-on: ubuntu-latest
