@@ -1,0 +1,121 @@
+version: 2
+updates:
+  # Enable version updates for pip (Python packages)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "whispr-team"
+    assignees:
+      - "whispr-team"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    # Group updates by dependency type
+    groups:
+      fastapi:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "pydantic"
+        update-types:
+          - "minor"
+          - "patch"
+      database:
+        patterns:
+          - "sqlalchemy"
+          - "alembic"
+          - "psycopg2-binary"
+        update-types:
+          - "minor"
+          - "patch"
+      machine-learning:
+        patterns:
+          - "tensorflow*"
+          - "transformers"
+          - "spacy"
+        update-types:
+          - "minor"
+          - "patch"
+      computer-vision:
+        patterns:
+          - "opencv-python"
+          - "Pillow"
+        update-types:
+          - "minor"
+          - "patch"
+      scientific:
+        patterns:
+          - "numpy"
+        update-types:
+          - "minor"
+          - "patch"
+      testing:
+        patterns:
+          - "pytest*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore specific dependencies that might cause breaking changes
+    ignore:
+      # Major version updates for ML frameworks (can have breaking changes)
+      - dependency-name: "tensorflow"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tensorflow-hub"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "transformers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "spacy"
+        update-types: ["version-update:semver-major"]
+      # Core framework major updates
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      # Computer vision libraries can have breaking changes
+      - dependency-name: "opencv-python"
+        update-types: ["version-update:semver-major"]
+      # NumPy major versions can break ML workflows
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      # Note: "6" appears to be an invalid dependency and should be removed
+    
+  # Enable version updates for Docker if you have Dockerfile
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "whispr-team"
+    assignees:
+      - "whispr-team"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Enable version updates for GitHub Actions if you have workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "first-wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "whispr-team"
+    assignees:
+      - "whispr-team"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
