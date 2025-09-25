@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Envs
+.venv/
+.env
+.env.*
+
+# Editors/OS
+.idea/
+.vscode/
+.DS_Store
+
+# Byte-compiled cache under src too
+src/**/*.pyc
