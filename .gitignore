@@ -19,3 +19,6 @@ build/
 
 # Byte-compiled cache under src too
 src/**/*.pyc
+
+# Results folder - contains generated plots and outputs
+results/
