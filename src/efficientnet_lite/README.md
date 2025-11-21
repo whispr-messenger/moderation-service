@@ -348,23 +348,6 @@ config = ProjectConfig(
 )
 ```
 
-### Programmatic Usage
-
-```python
-from main import FoodClassificationPipeline
-
-# Initialize pipeline
-pipeline = FoodClassificationPipeline("custom_config.yaml")
-
-# Run individual components
-pipeline.explore_data()
-history = pipeline.train_model()
-results = pipeline.evaluate_model()
-
-# Make predictions
-prediction = pipeline.predict_image("path/to/image.jpg")
-print(f"Predicted: {prediction['predicted_class']} ({prediction['confidence']:.3f})")
-```
 
 ### Hyperparameter Optimization
 
