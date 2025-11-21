@@ -3,23 +3,15 @@ created_at: '2025-10-23T17:15:03.079296'
 data:
   batch_size: 32
   blur_probability: 0.1
-  brightness_range: !!python/tuple
-  - 0.8
-  - 1.2
-  contrast_range: !!python/tuple
-  - 0.8
-  - 1.2
-  dataset_path: ../../Food Classification dataset
+  brightness_range: [0.8, 1.2]
+  contrast_range: [0.8, 1.2]
+  dataset_path: ../../Food Classification dataset/Train
   flip_probability: 0.5
-  image_size: !!python/tuple
-  - 224
-  - 224
+  image_size: [224, 224]
   num_workers: 4
   pin_memory: true
   rotation_range: 15.0
-  saturation_range: !!python/tuple
-  - 0.8
-  - 1.2
+  saturation_range: [0.8, 1.2]
   test_split: 0.1
   use_augmentation: true
   validation_split: 0.2
@@ -38,12 +30,8 @@ description: Food classification using EfficientNet Lite on-device model
 environment: development
 evaluation:
   benchmark_image_sizes:
-  - !!python/tuple
-    - 224
-    - 224
-  - !!python/tuple
-    - 240
-    - 240
+  - [224, 224]
+  - [240, 240]
   benchmark_samples: 100
   calculate_top_k: true
   metrics:
@@ -96,12 +84,9 @@ model:
   architecture: EfficientNetB0
   dropout_rate: 0.2
   fine_tune_learning_rate: 0.0001
-  freeze_base: true
-  input_shape: !!python/tuple
-  - 224
-  - 224
-  - 3
-  num_classes: 34
+  freeze_base: false
+  input_shape: [224, 224, 3]
+  num_classes: 7
   optimize_for_mobile: true
   pretrained_weights: imagenet
   quantization: true
@@ -117,8 +102,8 @@ training:
   early_stopping_mode: min
   early_stopping_monitor: val_loss
   early_stopping_patience: 10
-  epochs: 50
-  learning_rate: 0.001
+  epochs: 10
+  learning_rate: 0.0001
   loss_function: categorical_crossentropy
   lr_factor: 0.2
   lr_patience: 5

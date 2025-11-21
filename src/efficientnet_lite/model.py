@@ -9,7 +9,7 @@ This module implements:
 """
 
 import numpy as np
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
 import logging
 from pathlib import Path
 
@@ -138,7 +138,7 @@ class EfficientNetLiteModel:
     """
     
     def __init__(self, 
-                 num_classes: int = 34,
+                 num_classes: int = 7,
                  input_shape: Tuple[int, int, int] = (224, 224, 3),
                  base_model: str = 'EfficientNetB0',
                  dropout_rate: float = 0.2,
@@ -188,8 +188,24 @@ class EfficientNetLiteModel:
                 input_shape=self.input_shape
             )
         
-        # Freeze base model if requested
-        self.base_model.trainable = not self.freeze_base
+        # Configure base model trainability with partial freezing
+        if self.freeze_base:
+            # Freeze the base model completely
+            self.base_model.trainable = False
+            logger.info("Base model frozen - only training classification head")
+        else:
+            # Unfreeze base model but freeze early layers for stable fine-tuning
+            self.base_model.trainable = True
+            # Freeze first 100 layers (early feature extractors)
+            for layer in self.base_model.layers[:100]:
+                layer.trainable = False
+            # Allow fine-tuning of later layers (higher-level features)
+            for layer in self.base_model.layers[100:]:
+                layer.trainable = True
+            
+            trainable_count = sum([1 for layer in self.base_model.layers if layer.trainable])
+            total_count = len(self.base_model.layers)
+            logger.info(f"Partial fine-tuning: {trainable_count}/{total_count} layers trainable")
         
         # Build classification head
         inputs = self.base_model.input
@@ -255,7 +271,7 @@ class EfficientNetLiteModel:
         logger.info(f"Model compiled with {optimizer} optimizer (lr={learning_rate})")
     
     def get_callbacks(self, 
-                     checkpoint_path: str = 'best_model.h5',
+                     checkpoint_path: Optional[str] = None,
                      early_stopping_patience: int = 10,
                      reduce_lr_patience: int = 5) -> List:
         """
@@ -282,15 +298,20 @@ class EfficientNetLiteModel:
                 patience=reduce_lr_patience,
                 min_lr=0.0001,
                 verbose=1
-            ),
-            tf.keras.callbacks.ModelCheckpoint(
-                filepath=checkpoint_path,
-                monitor='val_accuracy',
-                save_best_only=True,
-                verbose=1
             )
         ]
-        
+
+        # Only add ModelCheckpoint if an explicit checkpoint path is provided
+        if checkpoint_path:
+            callbacks.append(
+                tf.keras.callbacks.ModelCheckpoint(
+                    filepath=checkpoint_path,
+                    monitor='val_accuracy',
+                    save_best_only=True,
+                    verbose=1
+                )
+            )
+
         return callbacks
     
     def fine_tune(self, 
@@ -323,9 +344,9 @@ class EfficientNetLiteModel:
         logger.info(f"Fine-tuning enabled: unfroze top {unfreeze_layers} layers")
     
     def convert_to_tflite(self, 
-                         output_path: str,
+                         output_path: Optional[str] = None,
                          quantize: bool = True,
-                         optimize_for_size: bool = True) -> str:
+                         optimize_for_size: bool = True) -> Optional[str]:
         """
         Convert the model to TensorFlow Lite format for deployment
         
@@ -352,16 +373,18 @@ class EfficientNetLiteModel:
         
         # Convert model
         tflite_model = converter.convert()
-        
-        # Save the model
-        tflite_path = Path(output_path)
-        tflite_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(tflite_path, 'wb') as f:
-            f.write(tflite_model)
-        
-        logger.info(f"TensorFlow Lite model saved to {tflite_path}")
-        return str(tflite_path)
+
+        # If an output path was provided, write the tflite file; otherwise return bytes
+        if output_path:
+            tflite_path = Path(output_path)
+            tflite_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(tflite_path, 'wb') as f:
+                f.write(tflite_model)
+            logger.info(f"TensorFlow Lite model saved to {tflite_path}")
+            return str(tflite_path)
+        else:
+            logger.info("TensorFlow Lite conversion completed; no file written (output_path=None)")
+            return None
     
     def get_model_info(self) -> Dict[str, Any]:
         """
@@ -390,7 +413,7 @@ class EfficientNetLiteModel:
         
         return info
     
-    def save_model(self, save_path: str, format_type: str = 'keras') -> None:
+    def save_model(self, save_path: str, format_type: str = 'keras', allow_save: bool = False) -> None:
         """
         Save the complete model (Keras 3 compatible)
         
@@ -400,16 +423,20 @@ class EfficientNetLiteModel:
         """
         if self.model is None:
             raise ValueError("Model must be built before saving")
-        
+
+        if not allow_save:
+            logger.warning("Model saving is disabled by default to avoid creating large files. Set allow_save=True to enable saving.")
+            return
+
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Ensure proper file extension based on format
         if format_type == 'keras' and not str(save_path).endswith('.keras'):
             save_path = save_path.with_suffix('.keras')
         elif format_type == 'h5' and not str(save_path).endswith('.h5'):
             save_path = save_path.with_suffix('.h5')
-        
+
         # Use Keras 3 compatible saving (no save_format argument)
         self.model.save(save_path)
         logger.info(f"Model saved to {save_path}")

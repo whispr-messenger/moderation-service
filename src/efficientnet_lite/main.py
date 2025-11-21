@@ -15,7 +15,6 @@ import sys
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
-import json
 import time
 
 # Import project modules
@@ -142,16 +141,11 @@ class FoodClassificationPipeline:
             save_dir=save_dir
         )
         
-        # Save dataset statistics
-        stats = self.data_loader.get_dataset_stats()
+        # Skip saving dataset statistics and class mapping to reduce clutter
         save_path = Path(save_dir)
         save_path.mkdir(exist_ok=True)
         
-        with open(save_path / "dataset_statistics.json", 'w') as f:
-            json.dump(stats, f, indent=2)
-        
-        # Save class mapping
-        self.data_loader.save_class_mapping(str(save_path / "class_mapping.json"))
+        logger.info("Dataset exploration completed - JSON files skipped to reduce clutter")
         
         logger.info(f"Data exploration completed. Results saved to {save_dir}")
     
@@ -255,10 +249,7 @@ class FoodClassificationPipeline:
         # Save results
         save_path = Path(save_dir)
         save_path.mkdir(exist_ok=True)
-        
-        with open(save_path / "optimization_results.json", 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
+                
         logger.info(f"Hyperparameter optimization completed. Best score: {results['best_score']:.4f}")
         logger.info(f"Best parameters: {results['best_params']}")
         
@@ -400,7 +391,8 @@ class FoodClassificationPipeline:
     
     def export_model(self, 
                     output_path: str = "deployed_model",
-                    format_type: str = 'tflite') -> str:
+                    format_type: str = 'tflite',
+                    save: bool = False) -> Optional[str]:
         """
         Export model for deployment
         
@@ -415,16 +407,30 @@ class FoodClassificationPipeline:
             raise ValueError("Model must be trained before export")
         
         if format_type.lower() == 'tflite':
-            output_file = f"{output_path}.tflite"
-            exported_path = self.model.convert_to_tflite(
-                output_file,
-                quantize=self.config.deployment.quantization,
-                optimize_for_size=self.config.deployment.tflite_optimize_for_size
-            )
+            if save:
+                output_file = f"{output_path}.tflite"
+                exported_path = self.model.convert_to_tflite(
+                    output_file,
+                    quantize=self.config.deployment.quantization,
+                    optimize_for_size=self.config.deployment.tflite_optimize_for_size
+                )
+            else:
+                # Do not write model file by default; perform conversion in-memory (no file written)
+                self.model.convert_to_tflite(
+                    output_path=None,
+                    quantize=self.config.deployment.quantization,
+                    optimize_for_size=self.config.deployment.tflite_optimize_for_size
+                )
+                exported_path = None
         else:
-            output_file = output_path / "model.keras"
-            self.model.save_model(output_file, format_type='keras')
-            exported_path = output_file
+            output_file = Path(output_path) / "model.keras"
+            # save_model is disabled by default; only save if explicitly requested
+            if save:
+                self.model.save_model(str(output_file), format_type='keras', allow_save=True)
+                exported_path = str(output_file)
+            else:
+                logger.info("Model save skipped by default to avoid creating large files.")
+                exported_path = None
         
         logger.info(f"Model exported to {exported_path}")
         return exported_path
@@ -491,13 +497,12 @@ class FoodClassificationPipeline:
             )
             results['export'] = {'path': exported_path}
             
-            # Save complete results
+            # Log completion
             execution_time = time.time() - start_time
             results['execution_time'] = execution_time
             results['status'] = 'completed'
             
-            with open(output_path / "pipeline_results.json", 'w') as f:
-                json.dump(results, f, indent=2, default=str)
+            # Skip saving pipeline_results.json to reduce clutter
             
             logger.info(f"Complete pipeline executed successfully in {execution_time:.2f} seconds")
             logger.info(f"Results saved to {output_path}")

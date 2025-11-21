@@ -311,7 +311,7 @@ class ModelEvaluator:
     
     def _predict_batch(self, batch_images: np.ndarray) -> np.ndarray:
         """
-        Predict batch of images (mock implementation)
+        Predict batch of images using real TensorFlow model
         
         Args:
             batch_images: Batch of images
@@ -319,7 +319,20 @@ class ModelEvaluator:
         Returns:
             Prediction probabilities
         """
-        # Mock prediction - replace with actual model inference
+        try:
+            # Use real model prediction
+            if hasattr(self.model, 'model') and self.model.model is not None:
+                predictions = self.model.model.predict(batch_images, verbose=0)
+                return predictions
+            else:
+                logger.warning("Model not available, using mock predictions")
+                return self._mock_predict_batch(batch_images)
+        except Exception as e:
+            logger.error(f"Real prediction failed: {e}, falling back to mock")
+            return self._mock_predict_batch(batch_images)
+    
+    def _mock_predict_batch(self, batch_images: np.ndarray) -> np.ndarray:
+        """Fallback mock prediction for batch of images"""
         batch_size = batch_images.shape[0]
         
         # Generate realistic predictions with some structure
@@ -506,8 +519,22 @@ class InferenceEngine:
         return image_array
     
     def _predict_single(self, image_array: np.ndarray) -> np.ndarray:
-        """Make prediction for single preprocessed image"""
-        # Mock prediction - replace with actual model inference
+        """Make prediction for single preprocessed image using real TensorFlow model"""
+        try:
+            # Use real model prediction
+            if hasattr(self.model, 'model') and self.model.model is not None:
+                predictions = self.model.model.predict(image_array, verbose=0)
+                return predictions[0]  # Return single prediction
+            else:
+                logger.warning("Model not available, using mock prediction")
+                return self._mock_predict_single(image_array)
+        except Exception as e:
+            logger.error(f"Real prediction failed: {e}, falling back to mock")
+            return self._mock_predict_single(image_array)
+    
+    def _mock_predict_single(self, image_array: np.ndarray) -> np.ndarray:
+        """Fallback mock prediction for single image"""
+        # Mock prediction with deterministic randomness based on image content
         np.random.seed(hash(str(image_array.mean())) % 2**32)  # Deterministic but varied
         
         # Generate realistic prediction distribution

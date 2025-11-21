@@ -308,16 +308,25 @@ class DataVisualizer:
             title = 'Confusion Matrix'
             fmt = 'd'
         
-        plt.figure(figsize=(max(10, len(class_names) * 0.8), max(8, len(class_names) * 0.6)))
+        plt.figure(figsize=(max(12, len(class_names) * 1.2), max(10, len(class_names) * 1.0)))
         
-        sns.heatmap(cm, annot=True, fmt=fmt, cmap='Blues',
-                   xticklabels=class_names, yticklabels=class_names)
+        # Create heatmap with better styling
+        sns.heatmap(cm, annot=True, fmt=fmt, cmap='RdYlBu_r', 
+                   xticklabels=class_names, yticklabels=class_names,
+                   cbar_kws={'label': 'Proportion' if normalize else 'Count'},
+                   square=True, linewidths=0.5, linecolor='white')
         
-        plt.title(title, fontsize=14, fontweight='bold')
-        plt.xlabel('Predicted Label', fontsize=12)
-        plt.ylabel('True Label', fontsize=12)
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
+        # Calculate and display accuracy
+        if normalize:
+            accuracy = np.trace(confusion_matrix) / np.sum(confusion_matrix)
+            plt.title(f'{title} (Accuracy: {accuracy:.2%})', fontsize=16, fontweight='bold', pad=20)
+        else:
+            plt.title(title, fontsize=16, fontweight='bold', pad=20)
+        
+        plt.xlabel('Predicted Label', fontsize=14, fontweight='bold')
+        plt.ylabel('True Label', fontsize=14, fontweight='bold')
+        plt.xticks(rotation=45, ha='right', fontsize=12)
+        plt.yticks(rotation=0, fontsize=12)
         plt.tight_layout()
         
         if save_path:
@@ -358,28 +367,17 @@ class DataVisualizer:
         # Rotate x-axis labels for better readability
         axes[0].tick_params(axis='x', rotation=45)
         
-        # Plot metrics as radar chart if we have enough metrics
+        # Radar chart removed to avoid complex/large visualizations on constrained environments
+        # Use the right subplot to show a concise message instead
+        axes[1].axis('off')
         if len(metrics) >= 3:
-            angles = np.linspace(0, 2 * np.pi, len(metric_names), endpoint=False)
-            values = list(metric_values)
-            
-            # Close the polygon
-            angles = np.concatenate((angles, [angles[0]]))
-            values = values + [values[0]]
-            
-            ax_radar = plt.subplot(122, projection='polar')
-            ax_radar.plot(angles, values, 'o-', linewidth=2, label='Performance')
-            ax_radar.fill(angles, values, alpha=0.25)
-            ax_radar.set_xticks(angles[:-1])
-            ax_radar.set_xticklabels(metric_names)
-            ax_radar.set_ylim(0, 1)
-            ax_radar.set_title('Performance Radar Chart', fontweight='bold', pad=20)
-            ax_radar.grid(True)
+            axes[1].text(0.5, 0.5, 'Radar chart disabled',
+                         ha='center', va='center', transform=axes[1].transAxes,
+                         fontsize=12, style='italic')
         else:
-            axes[1].axis('off')
-            axes[1].text(0.5, 0.5, 'Radar chart requires\nat least 3 metrics',
-                        ha='center', va='center', transform=axes[1].transAxes,
-                        fontsize=12, style='italic')
+            axes[1].text(0.5, 0.5, 'At least 3 metrics required',
+                         ha='center', va='center', transform=axes[1].transAxes,
+                         fontsize=12, style='italic')
         
         plt.tight_layout()
         

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DataConfig:
     """Data-related configuration parameters"""
-    dataset_path: str = "../../Food Classification dataset"
+    dataset_path: str = "../../Food Classification dataset/Train"
     image_size: tuple = (224, 224)
     batch_size: int = 32
     validation_split: float = 0.2
@@ -47,11 +47,11 @@ class DataConfig:
 class ModelConfig:
     """Model architecture configuration"""
     architecture: str = 'EfficientNetB0'
-    num_classes: int = 34
+    num_classes: int = 7
     input_shape: tuple = (224, 224, 3)
     dropout_rate: float = 0.2
     use_batch_norm: bool = True
-    freeze_base: bool = True
+    freeze_base: bool = False
     
     # Transfer learning parameters
     pretrained_weights: str = 'imagenet'
@@ -67,8 +67,8 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     """Training configuration parameters"""
-    epochs: int = 50
-    learning_rate: float = 0.001
+    epochs: int = 10
+    learning_rate: float = 0.0001
     optimizer: str = 'adam'
     loss_function: str = 'categorical_crossentropy'
     metrics: list = field(default_factory=lambda: ['accuracy'])
