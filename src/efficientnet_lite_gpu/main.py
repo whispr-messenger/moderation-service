@@ -32,9 +32,6 @@ def init(action: str, model_name: str):
     # check train results dir
     ht.check_train_results_dir(cfg)
 
-    # check all images in train dataset dir are readable
-    ht._scan_bad_images()
-
     # Receive parameters transmitted by the terminal
     func = ACTIONS.get(action)
 
