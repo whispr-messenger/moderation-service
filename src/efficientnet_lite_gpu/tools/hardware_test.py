@@ -91,14 +91,14 @@ def check_train_results_dir(cfg):
     training_results_dir = Path.cwd() / results_dir / cfg["train_config"]["training_results_dir"]
     ensure_dir_writable(training_results_dir)
 
-def _scan_bad_images(cfg):
+def _scan_bad_images(ath: str | Path):
     import tensorflow as tf
 
     supported_exts = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
-    print(f"Scanning {cfg} ...")
+    print(f"Scanning {Path} ...")
     bad_files = []
 
-    for p in cfg.rglob("*"):
+    for p in Path.rglob("*"):
         if not p.is_file():
             continue
 
