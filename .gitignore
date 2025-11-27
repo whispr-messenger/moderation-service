@@ -9,8 +9,10 @@ build/
 
 # Envs
 .venv/
+src/efficientnet_lite_gpu/.venv-efficientnet
 .env
 .env.*
+.cadence
 
 # Editors/OS
 .idea/
@@ -22,3 +24,10 @@ src/**/*.pyc
 
 # Results folder - contains generated plots and outputs
 results/
+
+# Model final
+src/efficientnet_lite_gpu/simple_efficientnet_food.h5
+
+# Dataset
+src/efficientnet_lite_gpu/train/dataset/Train
+src/efficientnet_lite_gpu/train/dataset/Test
