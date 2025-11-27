@@ -91,14 +91,14 @@ def check_train_results_dir(cfg):
     training_results_dir = Path.cwd() / results_dir / cfg["train_config"]["training_results_dir"]
     ensure_dir_writable(training_results_dir)
 
-def _scan_bad_images(ath: str | Path):
-    import tensorflow as tf
-
+def _scan_bad_images(root_dir: str | Path):
+    root_dir = Path(root_dir)
     supported_exts = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
-    print(f"Scanning {Path} ...")
+
+    print(f"Scanning {root_dir} ...")
     bad_files = []
 
-    for p in Path.rglob("*"):
+    for p in root_dir.rglob("*"):
         if not p.is_file():
             continue
 
@@ -115,7 +115,7 @@ def _scan_bad_images(ath: str | Path):
             print(f"[Error decode] {p} -> {e}")
             bad_files.append(p)
 
-    print(f"\nFound {len(bad_files)} error files。")
+    print(f"\nFound {len(bad_files)} error files.")
     return bad_files
 
 def check_train_dataset_dir(cfg):
@@ -140,6 +140,8 @@ def check_train_dataset_dir(cfg):
     count_images_in_folder(test_dataset_dir, recursive=True)
 
     _scan_bad_images(train_dataset_dir)
+    if test_dataset_dir.exists():
+        _scan_bad_images(test_dataset_dir)
 
 def ensure_dir_writable(path: str | Path):
     p = Path(path)
