@@ -1,5 +1,4 @@
 import sys
-import tensorflow as tf
 import pkg_resources
 from pathlib import Path
 from .tools_nvidia_cuda import *
@@ -92,6 +91,33 @@ def check_train_results_dir(cfg):
     training_results_dir = Path.cwd() / results_dir / cfg["train_config"]["training_results_dir"]
     ensure_dir_writable(training_results_dir)
 
+def _scan_bad_images(root_dir: Path):
+    import tensorflow as tf
+
+    supported_exts = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
+    print(f"Scanning {root_dir} ...")
+    bad_files = []
+
+    for p in root_dir.rglob("*"):
+        if not p.is_file():
+            continue
+
+        ext = p.suffix.lower()
+        if ext not in supported_exts:
+            print(f"[Format invalid] {p}")
+            bad_files.append(p)
+            continue
+
+        try:
+            img_bytes = tf.io.read_file(str(p))
+            _ = tf.image.decode_image(img_bytes)  # 尝试解码
+        except Exception as e:
+            print(f"[Error decode] {p} -> {e}")
+            bad_files.append(p)
+
+    print(f"\nFound {len(bad_files)} error files。")
+    return bad_files
+
 def check_train_dataset_dir(cfg):
     # Check the train dataset
     dataset_dir = cfg["train_config"]["dataset_dir"]
@@ -112,6 +138,8 @@ def check_train_dataset_dir(cfg):
 
     check_dataset_dir(test_dataset_dir)
     count_images_in_folder(test_dataset_dir, recursive=True)
+
+    _scan_bad_images(train_dataset_dir)
 
 def ensure_dir_writable(path: str | Path):
     p = Path(path)
