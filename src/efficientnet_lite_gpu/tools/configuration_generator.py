@@ -16,7 +16,7 @@ def config(model_name : str):
     cfg = {
         "train_config": {
             "training_divice" : device,
-            "mixed_precision" : True,
+            "mixed_precision" : False,
             "dataset_dir" : "train/dataset",
             "results_dir" : "train/results",
             "data_exploration_dir" : "data_exploration",
@@ -28,9 +28,9 @@ def config(model_name : str):
             "test_dir" : "Test",
             "batch_size" : 8,
             "image_size" : 224,
-            "initial_epochs" : 100,
+            "initial_epochs" : 5,
             "fine_tune" : True,
-            "fine_tune_epochs" : 100,
+            "fine_tune_epochs" : 2,
             "data_augmentation": {
                 "randomFlip": "horizontal",
                 "randomRotation": 0.05,

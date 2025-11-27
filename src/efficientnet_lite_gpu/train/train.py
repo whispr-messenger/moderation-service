@@ -448,12 +448,15 @@ def _evaluate_and_save(train_cfg: dict,
         "model_config": train_cfg["model_config"],
     }
     with open(train_results_dir / "training_config.json", "w", encoding="utf-8") as f:
-        json.dump(training_config, f, ensure_ascii=False, indent=2)
+        json.dump(_to_json_safe(training_config), f, ensure_ascii=False, indent=2)
 
     combined_history = {
         "stage1": history_stage1.history,
         "stage2": history_stage2.history if history_stage2 is not None else {},
     }
+
+    combined_history = _to_json_safe(combined_history)
+
     with open(train_results_dir / "training_history.json", "w", encoding="utf-8") as f:
         json.dump(combined_history, f, ensure_ascii=False, indent=2)
 
@@ -520,7 +523,9 @@ def _evaluate_and_save(train_cfg: dict,
     }
 
     with open(logs_dir / "best_metrics.json", "w", encoding="utf-8") as f:
-        json.dump(best_metrics, f, ensure_ascii=False, indent=2)
+        json.dump(_to_json_safe(best_metrics), f, ensure_ascii=False, indent=2)
+
+    combined_history = _to_json_safe(combined_history)
 
     with open(logs_dir / "training_history.json", "w", encoding="utf-8") as f:
         json.dump(combined_history, f, ensure_ascii=False, indent=2)
@@ -530,6 +535,21 @@ def _evaluate_and_save(train_cfg: dict,
     print(f"📝 Training results saved to {paths['training_results_dir']}")
     print(f"🧾 Training logs saved to {paths['training_logs_dir']}")
 
+
+def _to_json_safe(obj):
+    import numpy as np
+    import tensorflow as tf
+
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_to_json_safe(v) for v in obj]
+    elif isinstance(obj, (np.floating, tf.Tensor)):
+        return float(obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    else:
+        return obj
 
 def run(cfg: dict):
     train_cfg = cfg["train_config"]
