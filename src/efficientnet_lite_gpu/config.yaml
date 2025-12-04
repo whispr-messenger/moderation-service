@@ -1,6 +1,6 @@
 train_config:
-  training_divice: gpu
-  mixed_precision: true
+  training_divice: cpu
+  mixed_precision: false
   dataset_dir: train/dataset
   results_dir: train/results
   data_exploration_dir: data_exploration
@@ -12,9 +12,9 @@ train_config:
   test_dir: Test
   batch_size: 8
   image_size: 224
-  initial_epochs: 100
+  initial_epochs: 5
   fine_tune: true
-  fine_tune_epochs: 100
+  fine_tune_epochs: 2
   data_augmentation:
     randomFlip: horizontal
     randomRotation: 0.05

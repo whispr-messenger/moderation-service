@@ -74,3 +74,6 @@ source .venv-efficientnet/bin/activate
 ### Install Dependencies
 
 
+### Training
+
+python main.py --action=train  
