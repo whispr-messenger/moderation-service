@@ -25,6 +25,7 @@ src/**/*.pyc
 
 # Results folder - contains generated plots and outputs
 results/
+saved_model_effnetlite*
 
 # Model final
 src/efficientnet_lite_gpu/simple_efficientnet_food.h5
