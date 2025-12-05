@@ -5,14 +5,14 @@ import cv2
 import matplotlib.pyplot as plt
 
 
-datagen = ImageDataGenerator(rescale=1./255)
-train_gen = datagen.flow_from_directory(
-    "../train/dataset/Train",
-    target_size=(224, 224),
-    batch_size=8,
-    class_mode="categorical"
-)
-print(train_gen.class_indices)
+# datagen = ImageDataGenerator(rescale=1./255)
+# train_gen = datagen.flow_from_directory(
+#     "../train/dataset/Train",
+#     target_size=(224, 224),
+#     batch_size=8,
+#     class_mode="categorical"
+# )
+# print(train_gen.class_indices)
 
 # Ordre EXACT des classes utilisé à l'entraînement
 CLASS_NAMES = [
@@ -38,7 +38,7 @@ def preprocess_image(img_path):
             f"Impossible de lire l'image : {img_path}. Vérifiez que le fichier existe et que le chemin est correct.")
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (224, 224))  # taille attendue par ton modèle
-    img = img.astype("float32") / 255.0
+    img = img.astype("float32")
     img = np.expand_dims(img, axis=0)
     return img
 
@@ -81,6 +81,6 @@ def show_prediction(img_path, threshold=0.8):
     plt.show()
 
 # Exemple d'utilisation
-img_path = "./images/Burger-Train (125).jpeg"
+img_path = "./images/beked_potato.jpg"
 show_prediction(img_path, threshold=0.4)
 print(predict_image(img_path, threshold=0.4))
