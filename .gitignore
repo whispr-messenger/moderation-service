@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Envs
+.venv/
+.tfvenv/
+src/efficientnet_lite_gpu/.venv-efficientnet
+.env
+.env.*
+.cadence
+
+# Editors/OS
+.idea/
+.vscode/
+.DS_Store
+
+# Byte-compiled cache under src too
+src/**/*.pyc
+
+# Results folder - contains generated plots and outputs
+results/
+saved_model_effnetlite*
+
+# Model final
+src/efficientnet_lite_gpu/simple_efficientnet_food.h5
+efficientnet_food_finetuned.h5
+src/efficientnet_lite_gpu/BestModelEfficientNetLite*
+
+
+# Dataset
+src/efficientnet_lite_gpu/train/dataset/Train
+src/efficientnet_lite_gpu/train/dataset/Test
+
+

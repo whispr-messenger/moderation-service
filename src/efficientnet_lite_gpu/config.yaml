@@ -1,0 +1,50 @@
+train_config:
+  training_divice: cpu
+  mixed_precision: false
+  dataset_dir: train/dataset
+  results_dir: train/results
+  data_exploration_dir: data_exploration
+  evaluation_results_dir: evaluation_results
+  training_logs_dir: training_logs
+  training_results_dir: training_results
+  train_dir: Train
+  val_dir: Val
+  test_dir: Test
+  batch_size: 8
+  image_size: 224
+  initial_epochs: 5
+  fine_tune: true
+  fine_tune_epochs: 2
+  data_augmentation:
+    randomFlip: horizontal
+    randomRotation: 0.05
+    randomZoom: 0.1
+    randomContrast: 0.1
+  model_config:
+    model_name: efficientnet-b0
+    include_top: false
+    weights: imagenet
+    input_shape: (224, 224, 3)
+    trainable: false
+    optimizer: adam
+    output_activation: softmax
+    learning_rate: 0.01
+    loss: sparse_categorical_crossentropy
+    metrics:
+    - accuracy
+    EarlyStopping:
+      monitor: val_loss
+      patience: 8
+      restore_best_weights: true
+    ReduceLROnPlateau:
+      monitor: val_loss
+      factor: 0.5
+      patience: 3
+      min_lr: 1.0e-06
+sys_config:
+  disable_XLA_logs: true
+  tf_fore_gpu_allow_growth: true
+compilation_config:
+  compiler: gcc
+  compiler_args: []
+  model_name: BestModelEfficientNetLite.h5
