@@ -36,5 +36,6 @@ src/efficientnet_lite_gpu/BestModelEfficientNetLite*
 # Dataset
 src/efficientnet_lite_gpu/train/dataset/Train
 src/efficientnet_lite_gpu/train/dataset/Test
+Food Classification dataset/
 
 
