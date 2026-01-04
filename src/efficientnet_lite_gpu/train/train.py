@@ -14,6 +14,13 @@ import tensorflow as tf
 from tensorflow.keras.utils import load_img
 
 def _get_img_size(train_cfg: dict) -> tuple[int, int]:
+    """
+    Calcule la taille d'image (largeur, hauteur) à partir de la config d'entraînement.
+
+    - Si `image_size` est un int, retourne (image_size, image_size).
+    - Si `image_size` est une liste/tuple de longueur 2, retourne (w, h) castés en int.
+    - Sinon, lève une ValueError.
+    """
     image_size = train_cfg["image_size"]
     if isinstance(image_size, int):
         return (image_size, image_size)
@@ -23,6 +30,13 @@ def _get_img_size(train_cfg: dict) -> tuple[int, int]:
 
 
 def _apply_sys_config(sys_cfg: dict, train_cfg: dict):
+    """
+    Applique les réglages système / TensorFlow à partir de la configuration.
+
+    - Désactive JIT XLA si demandé.
+    - Configure la croissance mémoire GPU (TF_FORCE_GPU_ALLOW_GROWTH).
+    - Active le mixed precision si spécifié dans train_cfg.
+    """
     if sys_cfg.get("disable_XLA_logs", True):
         tf.config.optimizer.set_jit(False)
 
@@ -35,16 +49,25 @@ def _apply_sys_config(sys_cfg: dict, train_cfg: dict):
 
 
 def _build_paths(train_cfg: dict) -> dict:
+    """
+    Construit et crée (si besoin) tous les chemins utilisés pour le dataset et les résultats.
 
+    Retourne un dict contenant notamment :
+      - dataset_root, train_dir, val_dir, test_dir
+      - results_root, data_exploration_dir, evaluation_results_dir,
+        training_logs_dir, training_results_dir
+    """
+    
     cwd = Path.cwd()
 
+    # Racine du dataset (ex: train/dataset) et dossier des résultats (ex: train/results)
     dataset_root = cwd / train_cfg["dataset_dir"]        # e.g. train/dataset
     results_root = cwd / train_cfg["results_dir"]        # e.g. train/results
 
     paths = {
         "dataset_root": dataset_root,
         "train_dir": dataset_root / train_cfg["train_dir"],   # e.g. .../Train
-        "val_dir":   dataset_root / train_cfg["val_dir"],     # e.g. .../Val（如果你以后用单独 Val）
+        "val_dir":   dataset_root / train_cfg["val_dir"],     # e.g. .../Val
         "test_dir":  dataset_root / train_cfg["test_dir"],    # e.g. .../Test
 
         "results_root": results_root,
@@ -62,6 +85,15 @@ def _build_paths(train_cfg: dict) -> dict:
 
 
 def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
+    """
+    Construit les datasets train/val/test à partir des dossiers sur disque.
+
+    - Utilise image_dataset_from_directory avec un split 80/20 sur train_dir pour train/val.
+    - Charge le test_ds à partir de test_dir sans shuffle (utile pour les métriques).
+    - Active cache() et prefetch() pour optimiser le pipeline.
+    - Retourne (train_ds, val_ds, test_ds, class_names, num_classes).
+    """
+
     batch_size = train_cfg["batch_size"]
 
     train_dir = paths["train_dir"]
@@ -70,6 +102,7 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
     print("Using train dir:", train_dir)
     print("Using test dir:", test_dir)
 
+    # Dataset d'entraînement (avec split validation intégré)
     train_ds = tf.keras.utils.image_dataset_from_directory(
         train_dir,
         label_mode="int",
@@ -80,6 +113,7 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
         batch_size=batch_size,
     )
 
+    # Dataset de validation (sur le même dossier que train_dir)
     val_ds = tf.keras.utils.image_dataset_from_directory(
         train_dir,
         label_mode="int",
@@ -90,15 +124,19 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
         batch_size=batch_size,
     )
 
+    # Classes détectées automatiquement à partir des sous-dossiers
     class_names = train_ds.class_names
     num_classes = len(class_names)
     print("Classes:", class_names)
     print("Detected num_classes:", num_classes)
 
+
+    # Optimisation du pipeline avec cache et prefetch
     AUTOTUNE = tf.data.AUTOTUNE
     train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
     val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
+    # Dataset de test chargé à partir d'un dossier séparé (sans shuffle pour garder l'ordre)
     test_ds = tf.keras.utils.image_dataset_from_directory(
         test_dir,
         label_mode="int",
@@ -107,6 +145,7 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
         shuffle=False
     )
 
+    # Vérification que les classes du test correspondent à celles du train
     test_class_names = test_ds.class_names
     print("Test classes:", test_class_names)
     if test_class_names != class_names:
@@ -116,6 +155,13 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
 
 
 def _build_data_augmentation(train_cfg: dict) -> tf.keras.Sequential:
+    """
+    Construit un pipeline d'augmentation de données Keras Sequential.
+
+    Les hyperparamètres d'augmentation sont pris dans train_cfg["data_augmentation"],
+    avec des valeurs par défaut si une clé est absente.
+    """
+
     da = train_cfg["data_augmentation"]
     return tf.keras.Sequential([
         tf.keras.layers.RandomFlip(da.get("randomFlip", "horizontal")),
@@ -126,6 +172,13 @@ def _build_data_augmentation(train_cfg: dict) -> tf.keras.Sequential:
 
 
 def _get_efficientnet_class(model_name: str):
+    """
+    Retourne la classe EfficientNet Keras correspondant au nom de modèle donné.
+
+    Supporte: EfficientNetB0, B1, B2, B3 (plusieurs variantes de chaînes).
+    Lève une ValueError si le nom n'est pas supporté.
+    """
+
     name = model_name.lower()
     if name in ("efficientnet-b0", "efficientnet_b0"):
         return tf.keras.applications.EfficientNetB0
@@ -145,24 +198,46 @@ def _build_and_train_model(train_cfg: dict,
                            num_classes: int,
                            train_ds,
                            val_ds):
+    """
+    Construit un modèle EfficientNet + head de classification puis lance l'entraînement.
+
+    Étapes:
+      - Création du pipeline d'augmentation.
+      - Construction de la base EfficientNet avec les paramètres de model_cfg.
+      - Ajout d'un head (GlobalAveragePooling, BatchNorm, Dropout, Dense).
+      - Compilation avec l'optimizer, loss, metrics de model_cfg.
+      - Stage 1 : entraînement avec la base gelée.
+      - Stage 2 (optionnel) : fine-tuning de la base, sauf BatchNorm.
+    Retourne:
+      - model: modèle entraîné
+      - history_stage1: History Keras du stage 1
+      - history_stage2: History Keras du stage 2 ou None
+      - best_val_acc_stage1: meilleure val_accuracy du stage 1
+    """
+
     INITIAL_EPOCHS = train_cfg["initial_epochs"]
     FINE_TUNE_EPOCHS = train_cfg["fine_tune_epochs"]
     fine_tune = train_cfg["fine_tune"]
 
+    # Pipeline d'augmentation de données
     data_augmentation = _build_data_augmentation(train_cfg)
 
+    # Classe EfficientNet choisie à partir du nom de modèle
     EfficientNetClass = _get_efficientnet_class(model_cfg["model_name"])
 
+    # Base EfficientNet (transfer learning)
     base_model = EfficientNetClass(
         include_top=model_cfg["include_top"],
         weights=model_cfg["weights"],
         input_shape=img_size + (3,)
     )
+    # Base EfficientNet (transfer learning)
     base_model.trainable = model_cfg["trainable"]
 
+    # Construction du modèle complet (inputs -> augmentation -> base -> head)
     inputs = tf.keras.Input(shape=img_size + (3,))
     x = data_augmentation(inputs)
-    x = base_model(x, training=False)
+    x = base_model(x, training=False) # training=False pour ne pas updater BN en stage 1
     x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.Dropout(0.2)(x)
@@ -173,6 +248,7 @@ def _build_and_train_model(train_cfg: dict,
 
     model = tf.keras.Model(inputs, outputs)
 
+    # Configuration de l'optimizer (nom + learning rate)
     optimizer_name = model_cfg.get("optimizer", "adam")
     lr = float(model_cfg.get("learning_rate", 1e-2))
 
@@ -181,6 +257,7 @@ def _build_and_train_model(train_cfg: dict,
         "config": {"learning_rate": lr}
     })
 
+    # Compilation du modèle avec la loss et les métriques de classification souhaitées
     model.compile(
         optimizer=optimizer,
         loss=model_cfg["loss"],
@@ -189,6 +266,7 @@ def _build_and_train_model(train_cfg: dict,
 
     model.summary()
 
+    # Callbacks pour le stage 1 (early stopping + reduce LR on plateau)
     es_cfg = model_cfg["EarlyStopping"]
     rlr_cfg = model_cfg["ReduceLROnPlateau"]
 
@@ -206,6 +284,7 @@ def _build_and_train_model(train_cfg: dict,
         )
     ]
 
+    # Entraînement stage 1 (base gelée)
     history_stage1 = model.fit(
         train_ds,
         validation_data=val_ds,
@@ -213,17 +292,21 @@ def _build_and_train_model(train_cfg: dict,
         callbacks=callbacks_stage1,
     )
 
+    # Meilleure accuracy de validation obtenue au stage 1
     best_val_acc_stage1 = max(history_stage1.history["val_accuracy"])
     print(f"Stage 1 best val accuracy: {best_val_acc_stage1:.4f}")
 
     history_stage2 = None
 
+    # Stage 2 : fine-tuning de la base si activé
     if fine_tune:
         base_model.trainable = True
+        # On laisse les BatchNormalization gelées pour la stabilité
         for layer in base_model.layers:
             if isinstance(layer, tf.keras.layers.BatchNormalization):
                 layer.trainable = False
 
+        # Learning rate plus bas pour le fine-tuning
         fine_tune_lr = train_cfg.get("fine_tune_lr", lr / 100.0)
         optimizer_ft = tf.keras.optimizers.get({
             "class_name": optimizer_name,
@@ -236,6 +319,7 @@ def _build_and_train_model(train_cfg: dict,
             metrics=model_cfg["metrics"]
         )
 
+        # Afficher le nombre de paramètres entraînables / non entraînables
         trainable_count = sum(tf.keras.backend.count_params(w) for w in model.trainable_weights)
         non_trainable_count = sum(tf.keras.backend.count_params(w) for w in model.non_trainable_weights)
         print(f"Trainable params: {trainable_count}, Non-trainable params: {non_trainable_count}")
@@ -247,7 +331,7 @@ def _build_and_train_model(train_cfg: dict,
                 restore_best_weights=True,
             )
         ]
-
+        # Entraînement stage 2 (fine-tuning)
         history_stage2 = model.fit(
             train_ds,
             validation_data=val_ds,
@@ -269,6 +353,17 @@ def _evaluate_and_save(train_cfg: dict,
                        history_stage1,
                        history_stage2,
                        best_val_acc_stage1):
+    """
+    Évalue le modèle sur val/test, génère les métriques et sauvegarde modèles, graphes et JSON.
+
+    Tâches principales:
+      - evaluate sur val_ds, save du modèle.
+      - Statistiques dataset (nombre d'images par classe, résumés).
+      - Prédictions sur test_ds, calcul metrics sklearn (accuracy, precision, recall, f1).
+      - Classification report, matrice de confusion, courbes F1 par classe.
+      - Graphiques de l'historique d'entraînement (loss/accuracy).
+      - Sauvegarde de diverses métriques et historiques en JSON/PNG/NPY.
+    """
 
     NUM_CLASSES = len(class_names)
     IMG_SIZE = _get_img_size(train_cfg)
@@ -287,6 +382,11 @@ def _evaluate_and_save(train_cfg: dict,
     logs_dir = paths["training_logs_dir"]
 
     def count_images_in_dir(root_dir: Path):
+        """
+        Compte le nombre d'images par classe dans un dossier racine
+        (en parcourant les sous-dossiers).
+        """
+         
         class_counts = {}
         for class_name in sorted(os.listdir(root_dir)):
             class_path = root_dir / class_name
@@ -331,6 +431,11 @@ def _evaluate_and_save(train_cfg: dict,
     plt.close()
 
     def collect_sample_paths(root_dir: Path, max_per_class=3):
+        """
+        Récupère quelques chemins d'images d'échantillon par classe
+        pour visualiser des exemples du dataset.
+        """
+
         sample_paths = []
         for class_name in sorted(os.listdir(root_dir)):
             class_path = root_dir / class_name
@@ -537,6 +642,11 @@ def _evaluate_and_save(train_cfg: dict,
 
 
 def _to_json_safe(obj):
+    """
+    Convertit récursivement un objet (dict/list/valeurs numpy/tensorflow)
+    en structure JSON-sérialisable (float, int, listes, dicts).
+    """
+
     import numpy as np
     import tensorflow as tf
 
@@ -552,6 +662,17 @@ def _to_json_safe(obj):
         return obj
 
 def run(cfg: dict):
+    """
+    Point d'entrée principal de la pipeline d'entraînement.
+
+    Orchestration:
+      - Récupère les sous-configs (train/sys/compilation).
+      - Applique la config système TensorFlow.
+      - Construit les paths, datasets et le modèle.
+      - Entraîne le modèle (stage 1 + stage 2 éventuel).
+      - Évalue le modèle et sauvegarde toutes les métriques/graphes/résultats.
+    """
+    
     train_cfg = cfg["train_config"]
     sys_cfg = cfg["sys_config"]
     comp_cfg = cfg["compilation_config"]

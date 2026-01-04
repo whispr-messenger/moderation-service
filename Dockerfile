@@ -1,17 +1,16 @@
-# CUDA 12.3 + cuDNN
-FROM nvidia/cuda:12.3.2-cudnn8-runtime-ubuntu22.04
+# TensorFlow avec GPU support (CUDA + cuDNN inclus)
+FROM tensorflow/tensorflow:2.15.0-gpu-jupyter
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Mise à jour des paquets et installation des dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3-pip python3.11-distutils \
-    build-essential git ca-certificates && \
-    ln -s /usr/bin/python3.11 /usr/local/bin/python && \
-    ln -s /usr/bin/pip3 /usr/local/bin/pip && \
-    rm -rf /var/lib/apt/lists/*
+    build-essential git ca-certificates wget \
+    libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -23,4 +22,4 @@ COPY src/ ./src/
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-CMD ["python", "src/efficientnet_lite/main.py"]
+CMD ["python", "src/efficientnet_lite_gpu/main.py", "--action=train"]
