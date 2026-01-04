@@ -6,23 +6,29 @@ import matplotlib.pyplot as plt
 
 
 datagen = ImageDataGenerator(rescale=1./255)
-train_gen = datagen.flow_from_directory(
-    "../train/dataset/Train",
-    target_size=(224, 224),
-    batch_size=8,
-    class_mode="categorical"
-)
-# print(train_gen.class_indices)
 
-CLASS_NAMES = list(train_gen.class_indices.keys())
-# print (CLASS_NAMES)
-
-
-# Quelles classes sont considérées comme junk food
+CLASS_NAMES = None
 JUNK_CLASSES = {"Burger", "Crispy Chicken", "Donut", "Fries", "Hot Dog", "Pizza"}
+model = None
 
-model = load_model("../BestModelEfficientNetLite.h5")
-print("model loaded")
+
+def load_resources():
+    """Charge train_gen, CLASS_NAMES et le modèle uniquement quand on en a besoin."""
+    global CLASS_NAMES, model
+
+    if CLASS_NAMES is None:
+        train_gen = datagen.flow_from_directory(
+            "./train/dataset/Train",
+            target_size=(224, 224),
+            batch_size=8,
+            class_mode="categorical"
+        )
+        CLASS_NAMES = list(train_gen.class_indices.keys())
+
+    if model is None:
+        model = load_model("./BestModelEfficientNetLite.h5")
+        print("model loaded")
+
 
 def preprocess_image(img_path):
     img = cv2.imread(img_path)
@@ -36,6 +42,7 @@ def preprocess_image(img_path):
     return img
 
 def predict_image(img_path, threshold=0.9):
+    load_resources()
     img = preprocess_image(img_path)
     preds = model.predict(img)[0]          # vecteur de 7 probabilités
     best_idx = np.argmax(preds)            # index de la classe la plus probable
@@ -73,7 +80,11 @@ def show_prediction(img_path, threshold=0.9):
     plt.title(result, fontsize=10, color="red")
     plt.show()
 
-# Exemple d'utilisation
-img_path = "./images/healthy_food.jpg"
-show_prediction(img_path, threshold=0.9)
-print(predict_image(img_path, threshold=0.9))
+
+if __name__ == "__main__":
+    # Exemple d'utilisation
+    img_path = "./test_images/fries.jpg"
+    show_prediction(img_path, threshold=0.9)
+    print(predict_image(img_path, threshold=0.9))
+
+

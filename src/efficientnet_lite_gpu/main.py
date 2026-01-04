@@ -1,6 +1,6 @@
 from train.train import run as train_run
 from validation.validation import run as eval_run
-from test.test import run as test_run
+from src.efficientnet_lite_gpu.test.test_validation import run as test_run
 import tools.hardware_test as ht
 from tools.configuration_generator import config
 import sys

@@ -22,4 +22,4 @@ COPY src/ ./src/
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-CMD ["python", "src/efficientnet_lite/main.py"]
+CMD ["python", "src/efficientnet_lite_gpu/main.py", "--action=train"]
