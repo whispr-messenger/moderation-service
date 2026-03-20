@@ -1,59 +1,58 @@
 # Moderation Service
 
-A service for content moderation and classification using various AI models.
+This repository currently focuses on the EfficientNet GPU training and validation pipeline for image moderation tasks.
 
-## Features
+## Quick Start
 
-- Image classification using EfficientNet-Lite
-- Food image detection and classification
-- More features coming soon!
+1. Clone the repository and enter the project:
 
-## Installation
-
-1. Clone the repository:
 ```bash
 git clone https://github.com/whispr-messenger/moderation-service.git
 cd moderation-service
 ```
 
-2. Install the requirements:
+2. Switch to the active module directory:
+
+```bash
+cd src/efficientnet_lite_gpu
+```
+
+3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
-
-### Food Image Classification
-
-You can use the food classification model to identify food items in images:
-
-```python
-from src.efficientnet_lite import classify_image
-
-# Classify an image
-results = classify_image(image_path="path/to/your/image.jpg")
-print(results)
-```
-
-Or use the test script:
+4. Run pipeline actions:
 
 ```bash
-python test_food_classifier.py --image path/to/your/image.jpg
+python main.py --action train
+python main.py --action eval
+python main.py --action test
 ```
 
-### Download Models
+## Dataset Fetch (Optional)
 
-For first-time use, you may need to download the models:
-
-```python
-from src.efficientnet_lite.food_classifier import download_model
-
-model_path = download_model()
-print(f"Model downloaded to: {model_path}")
-```
-
-Or use the test script:
+If you only need the dataset fetch tool dependencies:
 
 ```bash
-python test_food_classifier.py --download
+pip install -r requirements-fetch-only.txt
 ```
+
+Dry-run fetch command:
+
+```bash
+python -m tools.fetch_google_dataset --dry-run
+```
+
+Windows helpers:
+
+- `run_fetch_google_dataset.bat`
+- `run_fetch_google_dataset_dry_run.bat`
+
+## Documentation
+
+- Project index: `documentation/PROJECT_INDEX.md`
+- Module guide: `src/efficientnet_lite_gpu/README.md`
+- Windows long path setup: `documentation/WINDOWS_LONG_PATHS.md`
+- Architecture reference: `documentation/1_architecture/1_system_design.md`

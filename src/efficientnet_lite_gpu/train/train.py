@@ -70,6 +70,7 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
     print("Using train dir:", train_dir)
     print("Using test dir:", test_dir)
 
+    # Le split train/validation est dérivé du même dossier Train pour rester simple.
     train_ds = tf.keras.utils.image_dataset_from_directory(
         train_dir,
         label_mode="int",
@@ -99,6 +100,7 @@ def _build_datasets(train_cfg: dict, paths: dict, img_size: tuple[int, int]):
     train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
     val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
+    # Le jeu de test est séparé et ne doit pas être mélangé au split de validation.
     test_ds = tf.keras.utils.image_dataset_from_directory(
         test_dir,
         label_mode="int",
@@ -206,6 +208,7 @@ def _build_and_train_model(train_cfg: dict,
         )
     ]
 
+    # Stage 1: entraînement tête de classification (backbone gelé).
     history_stage1 = model.fit(
         train_ds,
         validation_data=val_ds,
@@ -219,6 +222,7 @@ def _build_and_train_model(train_cfg: dict,
     history_stage2 = None
 
     if fine_tune:
+        # Stage 2: fine-tuning contrôlé du backbone avec LR plus faible.
         base_model.trainable = True
         for layer in base_model.layers:
             if isinstance(layer, tf.keras.layers.BatchNormalization):
@@ -274,6 +278,7 @@ def _evaluate_and_save(train_cfg: dict,
     IMG_SIZE = _get_img_size(train_cfg)
     BATCH_SIZE = train_cfg["batch_size"]
 
+    # Évaluation finale sur validation pour produire les métriques de suivi.
     val_loss, val_accuracy = model.evaluate(val_ds, verbose=0)
     print(f"Validation accuracy after fine-tuning: {val_accuracy:.4f}")
 
@@ -361,6 +366,7 @@ def _evaluate_and_save(train_cfg: dict,
     plt.savefig(data_exp_dir / "sample_images.png", dpi=300)
     plt.close()
 
+    # Évaluation indépendante sur test pour les métriques de généralisation.
     y_true = np.concatenate([labels.numpy() for _, labels in test_ds], axis=0)
     y_pred_probs = model.predict(test_ds)
     y_pred = np.argmax(y_pred_probs, axis=1)
@@ -552,6 +558,7 @@ def _to_json_safe(obj):
         return obj
 
 def run(cfg: dict):
+    # Orchestration complète: config -> datasets -> entraînement -> export des artefacts.
     train_cfg = cfg["train_config"]
     sys_cfg = cfg["sys_config"]
     comp_cfg = cfg["compilation_config"]

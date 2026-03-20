@@ -1,79 +1,74 @@
-# 🍽️ Food Classification with EfficientNet Lite GPU
+# EfficientNet Lite GPU Module
 
-A high-performance food image classification system based on **TensorFlow** and **EfficientNet Lite**, optimized for **real-time GPU inference** with excellent accuracy and efficiency.
+This directory contains the active training/validation/test pipeline used by this repository.
 
----
+## Working Directory
 
-## 🚀 1. Overview
+Run all commands from this folder:
 
-This project implements a multi-class food image classifier using **EfficientNetB0** and a **two-stage transfer learning strategy**.
-
-### Key Features
-- Automatic dataset loading & preprocessing
-- Built-in GPU-based data augmentation
-- EfficientNet backbone with fine-tuning
-- Training pipeline with early stopping & LR scheduling
-- Full evaluation on a separate Test dataset
-- Automatic generation of:
-    - Metrics (accuracy, precision, recall, F1-score)
-    - Confusion matrix
-    - Training curves
-    - Dataset visualizations
-    - JSON reports
-    - Saved model & logs
-
----
-
-## 📁 2. Project Structure
-
-```
-src/efficientnet_lite_gpu/
-├── train.py
-├── requirements.txt
-├── simple_efficientnet_food.h5
-├── .venv-efficientnet/
-│
-├── training_logs/
-│ ├── best_metrics.json
-│ ├── training_history.json
-│
-├── data_exploration/
-│ ├── class_distribution.png
-│ ├── dataset_statistics.png
-│ ├── sample_images.png
-│
-├── evaluation_results/
-│ ├── confusion_matrix.png
-│ ├── test_class_report.json
-│ ├── test_metrics.json
-│
-├── test/
-│ ├── test_gpu.py
+```bash
+cd src/efficientnet_lite_gpu
 ```
 
----
+## Dependencies
 
-## ⚙️ 3. Environment & Dependencies
+Install full runtime dependencies (train/eval/test + tools):
 
-### Virtual Environment
-
-**Windows**
-
-```
-..venv-efficientnet\Scripts\activate
+```bash
+pip install -r requirements.txt
 ```
 
-**macOS / Linux**
+Install fetch-only dependency set (for dataset crawler only):
 
-
+```bash
+pip install -r requirements-fetch-only.txt
 ```
-source .venv-efficientnet/bin/activate
+
+## Main Entrypoint
+
+`main.py` dispatches to the following actions:
+
+- `train`
+- `eval`
+- `test`
+
+Examples:
+
+```bash
+python main.py --action train
+python main.py --action eval
+python main.py --action test
 ```
 
+## Dataset Fetch Tool
 
-### Install Dependencies
+Script:
 
+- `tools/fetch_google_dataset.py`
 
-### Training
+Config file:
 
-python main.py --action=train  
+- `tools/dataset_download_config.yaml`
+
+Commands:
+
+```bash
+python -m tools.fetch_google_dataset --dry-run
+python -m tools.fetch_google_dataset
+```
+
+Windows helper scripts:
+
+- `run_fetch_google_dataset.bat`
+- `run_fetch_google_dataset_dry_run.bat`
+
+Safety note:
+
+- If config uses `balance: true`, the tool can delete extra images to rebalance classes.
+- Always run `--dry-run` first and backup datasets before enabling balancing.
+
+## Related Docs
+
+- Root entry: `../../README.md`
+- Project index: `../../documentation/PROJECT_INDEX.md`
+- Windows long path fix: `../../documentation/WINDOWS_LONG_PATHS.md`
