@@ -4,11 +4,18 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
+.eggs/
+*.egg
 dist/
 build/
+.Python
+pip-wheel-metadata/
 
 # Envs
 .venv/
+venv/
+ENV/
+env/
 src/efficientnet_lite_gpu/.venv-efficientnet
 .env
 .env.*
@@ -18,18 +25,47 @@ src/efficientnet_lite_gpu/.venv-efficientnet
 .idea/
 .vscode/
 .DS_Store
+Thumbs.db
 
 # Byte-compiled cache under src too
 src/**/*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.nox/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Results folder - contains generated plots and outputs
 results/
+**/results/
+**/training_logs/
+**/evaluation_results/
+**/data_exploration/
+**/checkpoints/
+**/tensorboard/
+**/runs/
+*.log
 
 # Model final
 src/efficientnet_lite_gpu/simple_efficientnet_food.h5
+*.h5
+*.keras
+*.ckpt
+*.weights.h5
 
 # Dataset
 src/efficientnet_lite_gpu/train/dataset/Train
 src/efficientnet_lite_gpu/train/dataset/Test
+src/efficientnet_lite_gpu/train/dataset/Val
+src/efficientnet_lite_gpu/train/dataset/tmp
+src/efficientnet_lite_gpu/train/dataset/cache
 efficientnet_food_finetuned.h5
 src/efficientnet_lite_gpu/BestModelEfficientNetLite.h5
+
+# Notebook
+.ipynb_checkpoints/

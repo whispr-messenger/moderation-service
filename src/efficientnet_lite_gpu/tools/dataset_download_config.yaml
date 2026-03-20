@@ -1,0 +1,39 @@
+# Config pour récupérer automatiquement les images (Bing ou Google)
+# Correspond aux catégories d’entraînement (Train/ClassName/)
+
+# Moteur de recherche : "duckduckgo" (recommandé), "bing" ou "google"
+search_engine: duckduckgo
+
+# DuckDuckGo : délai en secondes entre chaque catégorie (évite 403 Ratelimit). 0 = désactivé.
+delay_between_categories: 35
+
+# Délai en secondes après chaque téléchargement d'image (pour limiter le rate-limit)
+delay_after_download: 0.8
+# Délai entre chaque page de recherche DuckDuckGo (pour atteindre ~1000 images par catégorie)
+delay_between_pages: 2
+
+# Mots-clés de recherche par catégorie (liste = plusieurs recherches pour plus d'images)
+# Les dossiers déjà présents dans Train sont reconnus automatiquement même sans entrée ici
+search_keywords:
+  Burger: ["burger food", "burger", "hamburger", "cheeseburger", "beef burger", "fast food burger"]
+  Crispy Chicken: ["crispy chicken", "fried chicken", "fried chicken food", "chicken wings", "fried chicken wings"]
+  Donuts: ["donuts", "donut food", "doughnuts", "glazed donut", "donut dessert"]
+  Fries: ["french fries", "fries food", "potato fries", "chips fries", "crispy fries"]
+  Pizza: ["pizza", "pizza food", "margherita pizza", "pepperoni pizza", "italian pizza"]
+  Sandwich: ["sandwich", "sandwich food", "club sandwich", "grilled sandwich", "sandwich lunch"]
+
+# Nombre maximum d’images par catégorie
+# Nombre d'images à viser par catégorie (au moins 1000, pas de plafond)
+max_num_per_class: 1000
+
+# Nombre de tours par catégorie si pas encore 1000 images (relancer recherche + téléchargement)
+max_rounds_per_class: 5
+
+# Après téléchargement : équilibrer (chaque catégorie = même nombre que la plus petite)
+balance: true
+
+# Taille minimale des images (largeur, hauteur) ; conseillé >= image_size de l’entraînement
+min_size: [200, 200]
+
+# Optionnel : ne télécharger que ces catégories ; vide = toutes celles de search_keywords
+# only_classes: [Burger, Fries]

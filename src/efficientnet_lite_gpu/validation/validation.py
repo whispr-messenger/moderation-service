@@ -6,12 +6,14 @@ import matplotlib.pyplot as plt
 
 
 datagen = ImageDataGenerator(rescale=1./255)
+# Ce générateur sert surtout à récupérer l'ordre des classes appris à l'entraînement.
 train_gen = datagen.flow_from_directory(
-    "../train/dataset/Train",
+    "/mnt/c/Users/pc/Desktop/moderation-service/src/efficientnet_lite_gpu/train/dataset/Train",
     target_size=(224, 224),
     batch_size=8,
     class_mode="categorical"
 )
+
 print(train_gen.class_indices)
 
 # Ordre EXACT des classes utilisé à l'entraînement
@@ -28,17 +30,18 @@ CLASS_NAMES = [
 # Quelles classes sont considérées comme junk food
 JUNK_CLASSES = {"Burger", "Crispy Chicken", "Donut", "Fries", "Hot Dog", "Pizza"}
 
-model = load_model("../BestModelEfficientNetLite.h5")
+model = load_model("/mnt/c/Users/pc/Desktop/moderation-service/src/efficientnet_lite_gpu/BestModelEfficientNetLite.h5")
 print("model loaded")
 
 def preprocess_image(img_path):
+    # Prétraitement minimal aligné sur la taille attendue par le modèle.
     img = cv2.imread(img_path)
     if img is None:
         raise FileNotFoundError(
             f"Impossible de lire l'image : {img_path}. Vérifiez que le fichier existe et que le chemin est correct.")
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (224, 224))  # taille attendue par ton modèle
-    img = img.astype("float32") / 255.0
+    img = img.astype("float32")
     img = np.expand_dims(img, axis=0)
     return img
 
@@ -48,6 +51,7 @@ def predict_image(img_path, threshold=0.4):
     best_idx = np.argmax(preds)            # index de la classe la plus probable
     best_prob = float(preds[best_idx])     # probabilité max
     best_class = CLASS_NAMES[best_idx]     # nom de la classe
+    # Affichage détaillé utile pour diagnostiquer les classes proches.
     for name, p in zip(CLASS_NAMES, preds):
         print(f"  {name}: {p:.2%}")
     # Est-ce une junk food ?
@@ -81,6 +85,8 @@ def show_prediction(img_path, threshold=0.8):
     plt.show()
 
 # Exemple d'utilisation
-img_path = "./images/Burger-Train (125).jpeg"
-show_prediction(img_path, threshold=0.4)
-print(predict_image(img_path, threshold=0.4))
+def run(cfg: dict):
+    # Point d'entrée "eval" appelé depuis main.py.
+    img_path = "/mnt/c/Users/pc/Desktop/moderation-service/src/efficientnet_lite_gpu/validation/images/junk_food.jpg"
+    show_prediction(img_path, threshold=0.4)
+    print(predict_image(img_path, threshold=0.4))

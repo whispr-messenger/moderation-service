@@ -14,11 +14,12 @@ ACTIONS = {
 }
 
 def init(action: str, model_name: str):
+    # Point d'entrée unique : prépare la config puis délègue à l'action demandée.
 
     # Check environment
-    ht.check_requirement()
-    ht.check_python_version()
-    ht.check_tf_gpu_usable()
+    # ht.check_requirement()
+    # ht.check_python_version()
+    # ht.check_tf_gpu_usable()
 
     # Create configuration file
     config(model_name=model_name)
@@ -27,12 +28,12 @@ def init(action: str, model_name: str):
     cfg = validate_config()
 
     # check train dataset dir
-    ht.check_train_dataset_dir(cfg)
+    # ht.check_train_dataset_dir(cfg)
 
     # check train results dir
-    ht.check_train_results_dir(cfg)
+    # ht.check_train_results_dir(cfg)
 
-    # Receive parameters transmitted by the terminal
+    # Résolution de l'action CLI vers la fonction métier correspondante.
     func = ACTIONS.get(action)
 
     if func is None:
@@ -40,6 +41,7 @@ def init(action: str, model_name: str):
         print("Available actions: train | eval | test")
         sys.exit(1)
 
+    # On transmet la même configuration validée à tous les sous-modules.
     func(cfg)
 
 def parse_args():

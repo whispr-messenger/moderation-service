@@ -1,0 +1,4 @@
+# Only for tools/fetch_google_dataset.py
+# Use this file when you do not want to install full TensorFlow dependencies.
+# If requirements.txt is already installed, this file is not required.
+icrawler
