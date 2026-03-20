@@ -37,5 +37,14 @@ src/efficientnet_lite_gpu/BestModelEfficientNetLite*
 src/efficientnet_lite_gpu/train/dataset/Train
 src/efficientnet_lite_gpu/train/dataset/Test
 Food Classification dataset/
+src/vit_video/food_video_dataset/
+src/vit_video/food_data/
 
+
+# Models
+*.pth
+*.pt
+
+# Envs
+.venv312/
 

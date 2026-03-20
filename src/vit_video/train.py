@@ -1,259 +1,394 @@
-"""
-Training script for Video Food Classifier
-Usage: python train.py --epochs 10 --batch-size 4
-"""
+import argparse
+from datetime import datetime, timezone
+import json
+import sys
+from pathlib import Path
+
+# Ensure vit_video package is importable whether run from repo root, src/, or src/vit_video/
+_script_dir = Path(__file__).resolve().parent
+_src = _script_dir.parent
+if _src.name == "src" and str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
+elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path:
+    sys.path.insert(0, str(_script_dir.parent))
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from torchvision.models.vision_transformer import vit_b_16
-from torchvision.models import ViT_B_16_Weights
-import cv2
-import numpy as np
-from pathlib import Path
-from tqdm import tqdm
-from sklearn.model_selection import train_test_split
-import argparse
-import json
+
+from vit_video import pipeline
 
 
-class VideoViTClassifier(nn.Module):
-    def __init__(self, num_classes=2, pretrained=True, frames=8):
-        super().__init__()
-        self.frames = frames
-        self.vit = vit_b_16(weights=ViT_B_16_Weights.IMAGENET1K_V1 if pretrained else None)
-        self.vit.heads = nn.Identity()
-        self.classifier = nn.Linear(self.vit.hidden_dim, num_classes)
-
-    def forward(self, x):
-        b, t, c, h, w = x.shape
-        x = x.view(b * t, c, h, w)
-        feats = self.vit(x)
-        feats = feats.view(b, t, -1)
-        feats = feats.mean(dim=1)
-        out = self.classifier(feats)
-        return out
+def _auto_select_backbone() -> str:
+    """Pick a good default backbone depending on hardware."""
+    if torch.cuda.is_available():
+        # ViT-B/16 works well on modern GPUs for 224x224.
+        return "vit_b_16"
+    return "mobilevit_xxs"
 
 
-class VideoDataset(Dataset):
-    def __init__(self, video_paths, labels, num_frames=8, img_size=224, transform=None):
-        self.video_paths = video_paths
-        self.labels = labels
-        self.num_frames = num_frames
-        self.img_size = img_size
-        self.transform = transform or transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                               std=[0.229, 0.224, 0.225])
-        ])
-    
-    def __len__(self):
-        return len(self.video_paths)
-    
-    def load_video(self, video_path):
-        cap = cv2.VideoCapture(str(video_path))
-        frames = []
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        if total_frames < self.num_frames:
-            frame_indices = np.random.choice(total_frames, self.num_frames, replace=True)
-        else:
-            frame_indices = np.linspace(0, total_frames - 1, self.num_frames, dtype=int)
-        
-        for idx in frame_indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = cv2.resize(frame, (self.img_size, self.img_size))
-                frames.append(frame)
-            else:
-                frames.append(np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8))
-        
-        cap.release()
-        return np.array(frames)
-    
-    def __getitem__(self, idx):
-        video_path = self.video_paths[idx]
-        label = self.labels[idx]
-        
-        frames = self.load_video(video_path)
-        transformed_frames = []
-        for frame in frames:
-            frame_tensor = self.transform(frame)
-            transformed_frames.append(frame_tensor)
-        
-        video_tensor = torch.stack(transformed_frames)
-        return video_tensor, label
+def _select_learning_rate(
+    lr_candidates: list[float],
+    search_epochs: int,
+    classes: list[str],
+    backbone: str,
+    args,
+    device: torch.device,
+    train_loader,
+    val_loader,
+    class_weights,
+    out_dir: Path,
+) -> float:
+    """Run a short LR sweep and pick the candidate with lowest validation loss."""
+    if not lr_candidates or search_epochs <= 0:
+        return args.lr
 
+    print("\nRunning lightweight LR search...")
+    best_lr = args.lr
+    best_loss = float("inf")
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    pbar = tqdm(dataloader, desc='Training')
-    for videos, labels in pbar:
-        videos = videos.to(device)
-        labels = labels.to(device)
-        
-        optimizer.zero_grad()
-        outputs = model(videos)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        
-        running_loss += loss.item()
-        _, predicted = torch.max(outputs, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-        
-        pbar.set_postfix({
-            'loss': f'{loss.item():.4f}',
-            'acc': f'{100 * correct / total:.2f}%'
-        })
-    
-    epoch_loss = running_loss / len(dataloader)
-    epoch_acc = 100 * correct / total
-    return epoch_loss, epoch_acc
+    for lr in lr_candidates:
+        print(f"\n[LR Search] Testing lr={lr}")
+        candidate_model = pipeline.MobileViTModel(
+            num_classes=len(classes),
+            model_name=backbone,
+            pretrained=True,
+            temporal_pool=args.temporal_pool,
+            dropout=args.dropout,
+        )
+        candidate_trainer = pipeline.Trainer(
+            model=candidate_model,
+            device=device,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            lr=lr,
+            weight_decay=args.weight_decay,
+            output_path=out_dir,
+            max_grad_norm=args.max_grad_norm,
+            class_weights=class_weights,
+        )
+        history = candidate_trainer.fit(
+            epochs=search_epochs,
+            early_stopping_patience=max(1, min(args.patience, search_epochs)),
+            min_delta=args.min_delta,
+            checkpoint_name=f"_lr_search_{lr:.0e}.pth",
+            resume_from=None,
+        )
+        candidate_val_loss = min(history.get("val_loss", [float("inf")]))
+        print(f"[LR Search] lr={lr} -> best val_loss={candidate_val_loss:.4f}")
+        if candidate_val_loss < best_loss:
+            best_loss = candidate_val_loss
+            best_lr = lr
 
-
-def validate(model, dataloader, criterion, device):
-    model.eval()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    with torch.no_grad():
-        for videos, labels in tqdm(dataloader, desc='Validation'):
-            videos = videos.to(device)
-            labels = labels.to(device)
-            
-            outputs = model(videos)
-            loss = criterion(outputs, labels)
-            
-            running_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    
-    epoch_loss = running_loss / len(dataloader)
-    epoch_acc = 100 * correct / total
-    return epoch_loss, epoch_acc
+    print(f"\nSelected learning rate: {best_lr} (search best val_loss={best_loss:.4f})")
+    return best_lr
 
 
 def main(args):
-    # Setup
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = pipeline.get_device()
     print(f"Using device: {device}")
-    
-    # Collect video paths
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if not torch.cuda.is_available():
+        print("\n[!] GPU not available. Training will run on CPU.\n")
+        print("    To enable CUDA on Windows, install:")
+        print("    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121\n")
+
     dataset_dir = Path(args.dataset_dir)
-    video_paths = []
-    labels = []
-    
-    for video_path in (dataset_dir / 'healthy').glob('*.mp4'):
-        video_paths.append(video_path)
-        labels.append(0)
-    
-    for video_path in (dataset_dir / 'unhealthy').glob('*.mp4'):
-        video_paths.append(video_path)
-        labels.append(1)
-    
-    print(f"Total videos: {len(video_paths)}")
-    print(f"Healthy: {labels.count(0)}, Unhealthy: {labels.count(1)}")
-    
-    # Split dataset
-    train_paths, val_paths, train_labels, val_labels = train_test_split(
-        video_paths, labels, test_size=0.2, random_state=42, stratify=labels
+
+    if args.norm_mean:
+        norm_mean = [float(x.strip()) for x in args.norm_mean.split(",")]
+    else:
+        norm_mean = [0.485, 0.456, 0.406]
+
+    if args.norm_std:
+        norm_std = [float(x.strip()) for x in args.norm_std.split(",")]
+    else:
+        norm_std = [0.229, 0.224, 0.225]
+
+    if len(norm_mean) != 3 or len(norm_std) != 3:
+        raise ValueError("--norm-mean and --norm-std must have exactly 3 comma-separated values.")
+
+    # On Windows, num_workers > 0 can cause DataLoader pickle errors; use 0.
+    num_workers = 0 if sys.platform == "win32" else args.num_workers
+
+    # Use pipeline helper to build GPU-optimized dataloaders with augmentation on train.
+    train_loader, val_loader, classes = pipeline.build_dataloaders(
+        dataset_root=dataset_dir,
+        frames_per_video=args.num_frames,
+        batch_size=args.batch_size,
+        num_workers=num_workers,
+        img_size=args.img_size,
+        train_augment=not args.disable_augmentation,
+        norm_mean=norm_mean,
+        norm_std=norm_std,
     )
-    
-    print(f"Train: {len(train_paths)}, Val: {len(val_paths)}")
-    
-    # Create datasets and dataloaders
-    train_dataset = VideoDataset(train_paths, train_labels, 
-                                 num_frames=args.num_frames, 
-                                 img_size=args.img_size)
-    val_dataset = VideoDataset(val_paths, val_labels,
-                               num_frames=args.num_frames,
-                               img_size=args.img_size)
-    
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, 
-                             shuffle=True, num_workers=args.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
-                           shuffle=False, num_workers=args.num_workers)
-    
-    # Initialize model
-    model = VideoViTClassifier(num_classes=2, pretrained=True, frames=args.num_frames)
-    model = model.to(device)
-    
-    # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
-                                                     factor=0.5, patience=3)
-    
-    # Training loop
-    best_val_acc = 0.0
-    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
-    
-    print(f"\nStarting training for {args.epochs} epochs...")
+
+    print(f"Classes: {classes}")
+    print(f"Train samples: {len(train_loader.dataset)}, Val samples: {len(val_loader.dataset)}")
+
+    # Warn when class coverage is likely too small for robust generalization.
+    class_counts = {cls: 0 for cls in classes}
+    for idx in train_loader.dataset.indices:
+        _, label = train_loader.dataset.dataset.items[idx]
+        class_counts[classes[label]] += 1
+
+    low_data_classes = {k: v for k, v in class_counts.items() if v < args.min_samples_per_class}
+    if low_data_classes:
+        print("\n[WARN] Low sample count per class detected:")
+        for cls_name, count in low_data_classes.items():
+            print(f"  - {cls_name}: {count} training samples (< {args.min_samples_per_class})")
+        print("       Consider collecting more videos for better recall and stability.")
+
+    # Backbone selection: allow explicit name or 'auto'.
+    backbone = args.backbone
+    if backbone == "auto":
+        backbone = _auto_select_backbone()
+    print(f"Backbone: {backbone}")
+
+    class_weights = None
+    if args.class_weighting:
+        class_weights = pipeline.compute_class_weights_from_dataset(train_loader.dataset, len(classes))
+        print(f"Class weights enabled: {class_weights.tolist()}")
+
+    # High-quality training loop via Trainer (AMP, AdamW, grad clipping).
+    out_path = Path(args.output_model).resolve()
+    lr_candidates = [
+        float(x.strip()) for x in args.lr_candidates.split(",") if x.strip()
+    ] if args.lr_candidates else []
+    selected_lr = _select_learning_rate(
+        lr_candidates=lr_candidates,
+        search_epochs=args.hparam_search_epochs,
+        classes=classes,
+        backbone=backbone,
+        args=args,
+        device=device,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        class_weights=class_weights,
+        out_dir=out_path.parent,
+    )
+
+    model = pipeline.MobileViTModel(
+        num_classes=len(classes),
+        model_name=backbone,
+        pretrained=True,
+        temporal_pool=args.temporal_pool,
+        dropout=args.dropout,
+    )
+
+    trainer = pipeline.Trainer(
+        model=model,
+        device=device,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        lr=selected_lr,
+        weight_decay=args.weight_decay,
+        output_path=out_path.parent,
+        max_grad_norm=args.max_grad_norm,
+        class_weights=class_weights,
+    )
+
+    resume_from = Path(args.resume_from) if args.resume_from else None
+
+    print(f"\nStarting training for up to {args.epochs} epochs...")
     print("=" * 60)
-    
-    for epoch in range(args.epochs):
-        print(f"\nEpoch {epoch+1}/{args.epochs}")
-        print("-" * 60)
-        
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
-        
-        history['train_loss'].append(train_loss)
-        history['train_acc'].append(train_acc)
-        history['val_loss'].append(val_loss)
-        history['val_acc'].append(val_acc)
-        
-        scheduler.step(val_loss)
-        
-        print(f"\nEpoch {epoch+1} Summary:")
-        print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
-        print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), args.output_model)
-            print(f"✓ Model saved to {args.output_model} (Best val acc: {best_val_acc:.2f}%)")
-    
+
+    history = trainer.fit(
+        epochs=args.epochs,
+        early_stopping_patience=args.patience,
+        min_delta=args.min_delta,
+        checkpoint_name=out_path.name,
+        resume_from=resume_from,
+    )
+
+    # Compute best validation metrics from history.
+    best_val_loss = min(history["val_loss"]) if history["val_loss"] else float("inf")
+    best_idx = history["val_loss"].index(best_val_loss) if history["val_loss"] else -1
+    best_val_acc = history["val_acc"][best_idx] if best_idx >= 0 else 0.0
+
     print("\n" + "=" * 60)
     print("Training complete!")
     print(f"Best validation accuracy: {best_val_acc:.2f}%")
-    
-    # Save history
-    with open('training_history.json', 'w') as f:
+    print(f"Best validation loss: {best_val_loss:.4f}")
+
+    # Save history next to the model checkpoint for later analysis.
+    history_path = out_path.with_name(out_path.stem + "_history.json")
+    with history_path.open("w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
-    print("Training history saved to training_history.json")
+    print(f"Training history saved to {history_path}")
+
+    metrics_path = out_path.with_name(out_path.stem + "_training_metrics.json")
+    training_metrics = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "checkpoint_path": str(out_path),
+        "history_path": str(history_path),
+        "dataset_dir": str(dataset_dir.resolve()),
+        "backbone": backbone,
+        "classes": classes,
+        "num_classes": len(classes),
+        "num_frames": args.num_frames,
+        "img_size": args.img_size,
+        "temporal_pool": args.temporal_pool,
+        "class_weighting": args.class_weighting,
+        "class_weights": class_weights.tolist() if class_weights is not None else None,
+        "normalization": {"mean": norm_mean, "std": norm_std},
+        "lr": selected_lr,
+        "lr_search": {
+            "enabled": args.hparam_search_epochs > 0,
+            "epochs": args.hparam_search_epochs,
+            "candidates": lr_candidates,
+        },
+        "train_samples": len(train_loader.dataset),
+        "val_samples": len(val_loader.dataset),
+        "best_val_accuracy": best_val_acc,
+        "best_val_loss": best_val_loss,
+        "epochs_requested": args.epochs,
+        "epochs_completed": len(history.get("train_loss", [])),
+    }
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(training_metrics, f, indent=2)
+    print(f"Training metrics saved to {metrics_path}")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train Video Food Classifier')
-    parser.add_argument('--dataset-dir', type=str, default='food_video_dataset',
-                       help='Path to dataset directory')
-    parser.add_argument('--epochs', type=int, default=10,
-                       help='Number of training epochs')
-    parser.add_argument('--batch-size', type=int, default=2,
-                       help='Batch size for training')
-    parser.add_argument('--lr', type=float, default=1e-4,
-                       help='Learning rate')
-    parser.add_argument('--num-frames', type=int, default=8,
-                       help='Number of frames to sample from each video')
-    parser.add_argument('--img-size', type=int, default=224,
-                       help='Image size (height and width)')
-    parser.add_argument('--num-workers', type=int, default=0,
-                       help='Number of data loading workers')
-    parser.add_argument('--output-model', type=str, default='best_food_classifier.pth',
-                       help='Path to save best model')
-    
+if __name__ == "__main__":
+    _default_dataset = Path(__file__).resolve().parent / "food_data" / "frames"
+
+    parser = argparse.ArgumentParser(description="Train Video Food Classifier.")
+    parser.add_argument(
+        "--dataset-dir",
+        type=str,
+        default=str(_default_dataset),
+        help="Path to dataset directory (class subfolders with videos or frame folders).",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+        help="Maximum number of training epochs.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=8,
+        help="Batch size for training.",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1e-4,
+        help="Learning rate.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-4,
+        help="Weight decay for AdamW optimizer.",
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=1.0,
+        help="Gradient clipping max norm.",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.1,
+        help="Dropout applied on pooled video features before classifier.",
+    )
+    parser.add_argument(
+        "--num-frames",
+        type=int,
+        default=8,
+        help="Number of frames to sample from each video.",
+    )
+    parser.add_argument(
+        "--img-size",
+        type=int,
+        default=224,
+        help="Image size (height and width).",
+    )
+    parser.add_argument(
+        "--disable-augmentation",
+        action="store_true",
+        help="Disable training-time data augmentation.",
+    )
+    parser.add_argument(
+        "--class-weighting",
+        action="store_true",
+        help="Enable inverse-frequency class weighting for imbalanced datasets.",
+    )
+    parser.add_argument(
+        "--min-samples-per-class",
+        type=int,
+        default=50,
+        help="Warn if any class has fewer than this many training samples.",
+    )
+    parser.add_argument(
+        "--temporal-pool",
+        type=str,
+        default="avg",
+        choices=["avg", "max", "conv1d"],
+        help="Temporal aggregation strategy over frame embeddings.",
+    )
+    parser.add_argument(
+        "--norm-mean",
+        type=str,
+        default="0.485,0.456,0.406",
+        help="Comma-separated normalization mean (3 values).",
+    )
+    parser.add_argument(
+        "--norm-std",
+        type=str,
+        default="0.229,0.224,0.225",
+        help="Comma-separated normalization std (3 values).",
+    )
+    parser.add_argument(
+        "--hparam-search-epochs",
+        type=int,
+        default=0,
+        help="If > 0, run a quick LR search for this many epochs per candidate.",
+    )
+    parser.add_argument(
+        "--lr-candidates",
+        type=str,
+        default="1e-5,3e-5,1e-4,3e-4",
+        help="Comma-separated learning-rate candidates for optional quick search.",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=4,
+        help="Number of data loading workers.",
+    )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=5,
+        help="Early stopping patience (epochs without val loss improvement).",
+    )
+    parser.add_argument(
+        "--min-delta",
+        type=float,
+        default=1e-4,
+        help="Minimum decrease in val loss to count as improvement.",
+    )
+    parser.add_argument(
+        "--backbone",
+        type=str,
+        default="auto",
+        help="Backbone architecture (e.g., auto, mobilevit_s, mobilevit_xs, mobilevit_xxs, vit_b_16).",
+    )
+    parser.add_argument(
+        "--output-model",
+        type=str,
+        default="best_food_classifier.pth",
+        help="Output path for trained model checkpoint.",
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default="",
+        help="Optional checkpoint path to resume fine-tuning from.",
+    )
+
     args = parser.parse_args()
     main(args)

@@ -1,0 +1,34 @@
+{
+  "model_name": "mobilevit_s",
+  "task": "video_classification",
+  "num_classes": 2,
+  "classes": [
+    "healthy",
+    "unhealthy"
+  ],
+  "input_shape": {
+    "batch": 1,
+    "frames": 8,
+    "channels": 3,
+    "height": 224,
+    "width": 224
+  },
+  "input_format": "BTCHW",
+  "normalization": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "exported_formats": [
+    "torchscript"
+  ],
+  "framework": "pytorch",
+  "backbone": "mobilevit_s"
+}
