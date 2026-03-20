@@ -16,16 +16,6 @@ train_gen = datagen.flow_from_directory(
 
 print(train_gen.class_indices)
 
-# Ordre EXACT des classes utilisé à l'entraînement
-CLASS_NAMES = [
-    "Baked Potato",
-    "Burger",
-    "Crispy Chicken",
-    "Donut",
-    "Fries",
-    "Hot Dog",
-    "Pizza",
-]
 
 # Quelles classes sont considérées comme junk food
 JUNK_CLASSES = {"Burger", "Crispy Chicken", "Donut", "Fries", "Hot Dog", "Pizza"}
@@ -45,7 +35,7 @@ def preprocess_image(img_path):
     img = np.expand_dims(img, axis=0)
     return img
 
-def predict_image(img_path, threshold=0.4):
+def predict_image(img_path, threshold=0.9):
     img = preprocess_image(img_path)
     preds = model.predict(img)[0]          # vecteur de 7 probabilités
     best_idx = np.argmax(preds)            # index de la classe la plus probable
@@ -67,12 +57,12 @@ def predict_image(img_path, threshold=0.4):
         result = (
             f"Prédiction incertaine (meilleure catégorie : {best_class} "
             f"avec {best_prob:.2%} < {threshold:.0%})\n"
-            f"Junk food : INCONNU"
+            f"Junk food : Non"
         )
 
     return result
 
-def show_prediction(img_path, threshold=0.8):
+def show_prediction(img_path, threshold=0.9):
     img = cv2.imread(img_path)
     if img is None:
         raise FileNotFoundError(
