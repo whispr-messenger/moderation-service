@@ -1,0 +1,9 @@
+-r requirements.txt
+pytest>=8.0
+pytest-cov>=4.0
+PyYAML>=6.0
+# pkg_resources (hardware_test) indisponible avec setuptools>=81
+setuptools>=65,<81
+matplotlib>=3.8
+scikit-learn>=1.3
+opencv-python-headless>=4.8
