@@ -17,36 +17,7 @@ if _src.name == "src" and str(_src) not in sys.path:
 elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path:
     sys.path.insert(0, str(_script_dir.parent))
 
-from vit_video import pipeline
-
-
-def load_model(
-    model_path: Path,
-    num_classes: int,
-    model_name: str = "mobilevit_s",
-    device: torch.device = None,
-) -> torch.nn.Module:
-    device = device or pipeline.get_device()
-    
-    checkpoint = torch.load(model_path, map_location=device)
-    state_dict = pipeline.extract_state_dict(checkpoint)
-    
-    detected = pipeline.detect_backbone_from_checkpoint(state_dict)
-    backbone = model_name if model_name != "mobilevit_s" else detected
-    print(f"Using backbone: {backbone} (detected: {detected})")
-    
-    model = pipeline.MobileViTModel(
-        num_classes=num_classes,
-        model_name=backbone,
-        pretrained=False,
-    )
-    
-    remapped = pipeline.remap_state_dict(state_dict)
-    model.load_state_dict(remapped, strict=False)
-    
-    model = model.to(device)
-    model.eval()
-    return model
+from vit_video.utils import print_device_info, parse_normalization_values, get_device, load_model_from_checkpoint
 
 
 def export_torchscript(
@@ -351,14 +322,9 @@ def main(args: argparse.Namespace) -> None:
     print("=" * 60)
     print("Mobile Model Export")
     print("=" * 60)
-    device = pipeline.get_device()
-    print(f"Using device: {device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    if not torch.cuda.is_available():
-        print("\n[!] GPU not available. To use CUDA:")
-        print("    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
-        print()
-    
+    device = get_device()
+    print_device_info()
+
     model_path = Path(args.model)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -377,10 +343,7 @@ def main(args: argparse.Namespace) -> None:
     # Classes
     classes = args.classes.split(",") if args.classes else [f"class_{i}" for i in range(args.num_classes)]
 
-    norm_mean = [float(x.strip()) for x in args.norm_mean.split(",")]
-    norm_std = [float(x.strip()) for x in args.norm_std.split(",")]
-    if len(norm_mean) != 3 or len(norm_std) != 3:
-        raise ValueError("--norm-mean and --norm-std must contain exactly 3 values.")
+    norm_mean, norm_std = parse_normalization_values(args.norm_mean, args.norm_std)
     
     print(f"\nModel: {model_path}")
     print(f"Backbone: {args.backbone}")
@@ -392,7 +355,7 @@ def main(args: argparse.Namespace) -> None:
     
     # Load model
     print("\nLoading model...")
-    model = load_model(
+    model = load_model_from_checkpoint(
         model_path=model_path,
         num_classes=args.num_classes,
         model_name=args.backbone,
@@ -517,8 +480,8 @@ if __name__ == "__main__":
         help="Comma-separated class names"
     )
     parser.add_argument(
-        "--backbone", type=str, default="mobilevit_s",
-        help="Backbone model name (must match training)"
+        "--backbone", type=str, default="auto",
+        help="Backbone model name (must match training). Use \"auto\" for auto-detection from checkpoint."
     )
     parser.add_argument(
         "--num-frames", type=int, default=8,

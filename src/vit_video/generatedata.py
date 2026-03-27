@@ -1,8 +1,8 @@
 import argparse
-import json
 import shutil
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 import cv2

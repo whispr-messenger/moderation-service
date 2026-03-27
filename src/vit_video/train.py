@@ -14,7 +14,10 @@ elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path
 
 import torch
 
-from vit_video import pipeline
+from vit_video.utils import print_device_info, parse_normalization_values, get_device
+from vit_video.data import build_dataloaders
+from vit_video.models import MobileViTModel
+from vit_video.engine import Trainer, compute_class_weights_from_dataset
 
 
 def _auto_select_backbone() -> str:
@@ -47,14 +50,14 @@ def _select_learning_rate(
 
     for lr in lr_candidates:
         print(f"\n[LR Search] Testing lr={lr}")
-        candidate_model = pipeline.MobileViTModel(
+        candidate_model = MobileViTModel(
             num_classes=len(classes),
             model_name=backbone,
             pretrained=True,
             temporal_pool=args.temporal_pool,
             dropout=args.dropout,
         )
-        candidate_trainer = pipeline.Trainer(
+        candidate_trainer = Trainer(
             model=candidate_model,
             device=device,
             train_loader=train_loader,
@@ -83,34 +86,19 @@ def _select_learning_rate(
 
 
 def main(args):
-    device = pipeline.get_device()
-    print(f"Using device: {device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    if not torch.cuda.is_available():
-        print("\n[!] GPU not available. Training will run on CPU.\n")
-        print("    To enable CUDA on Windows, install:")
-        print("    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121\n")
+    print_device_info()
+    device = get_device()
 
     dataset_dir = Path(args.dataset_dir)
 
-    if args.norm_mean:
-        norm_mean = [float(x.strip()) for x in args.norm_mean.split(",")]
-    else:
-        norm_mean = [0.485, 0.456, 0.406]
-
-    if args.norm_std:
-        norm_std = [float(x.strip()) for x in args.norm_std.split(",")]
-    else:
-        norm_std = [0.229, 0.224, 0.225]
-
-    if len(norm_mean) != 3 or len(norm_std) != 3:
-        raise ValueError("--norm-mean and --norm-std must have exactly 3 comma-separated values.")
+    norm_mean, norm_std = parse_normalization_values(args.norm_mean, args.norm_std)
 
     # On Windows, num_workers > 0 can cause DataLoader pickle errors; use 0.
+    import sys
     num_workers = 0 if sys.platform == "win32" else args.num_workers
 
     # Use pipeline helper to build GPU-optimized dataloaders with augmentation on train.
-    train_loader, val_loader, classes = pipeline.build_dataloaders(
+    train_loader, val_loader, classes = build_dataloaders(
         dataset_root=dataset_dir,
         frames_per_video=args.num_frames,
         batch_size=args.batch_size,
@@ -119,6 +107,7 @@ def main(args):
         train_augment=not args.disable_augmentation,
         norm_mean=norm_mean,
         norm_std=norm_std,
+        seed=42,
     )
 
     print(f"Classes: {classes}")
@@ -145,7 +134,7 @@ def main(args):
 
     class_weights = None
     if args.class_weighting:
-        class_weights = pipeline.compute_class_weights_from_dataset(train_loader.dataset, len(classes))
+        class_weights = compute_class_weights_from_dataset(train_loader.dataset, len(classes))
         print(f"Class weights enabled: {class_weights.tolist()}")
 
     # High-quality training loop via Trainer (AMP, AdamW, grad clipping).
@@ -166,7 +155,7 @@ def main(args):
         out_dir=out_path.parent,
     )
 
-    model = pipeline.MobileViTModel(
+    model = MobileViTModel(
         num_classes=len(classes),
         model_name=backbone,
         pretrained=True,
@@ -174,7 +163,7 @@ def main(args):
         dropout=args.dropout,
     )
 
-    trainer = pipeline.Trainer(
+    trainer = Trainer(
         model=model,
         device=device,
         train_loader=train_loader,

@@ -22,14 +22,7 @@ if _src.name == "src" and str(_src) not in sys.path:
 elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path:
     sys.path.insert(0, str(_script_dir.parent))
 
-from vit_video import pipeline
-
-
-def _build_transform(mean: list[float], std: list[float]) -> transforms.Compose:
-    return transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std),
-    ])
+from vit_video.utils import print_device_info, parse_normalization_values, get_device, build_transform, load_model_from_checkpoint
 
 
 def _sample_video_frames(cap: cv2.VideoCapture, num_frames: int, img_size: int):
@@ -191,46 +184,24 @@ def webcam_inference(model, device, transform, num_frames=8, img_size=224, num_c
 
 
 def main(args):
-    device = pipeline.get_device()
-    print(f"Using device: {device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
+    device = get_device()
+    print_device_info()
 
-    norm_mean = [float(x.strip()) for x in args.norm_mean.split(",")]
-    norm_std = [float(x.strip()) for x in args.norm_std.split(",")]
-    if len(norm_mean) != 3 or len(norm_std) != 3:
-        raise ValueError("--norm-mean and --norm-std must contain exactly 3 values")
+    norm_mean, norm_std = parse_normalization_values(args.norm_mean, args.norm_std)
+    transform = build_transform(mean=norm_mean, std=norm_std)
 
-    transform = _build_transform(mean=norm_mean, std=norm_std)
-
-    if not Path(args.model).exists():
-        print(f"Error: Model file not found: {args.model}")
-        print("Please train a model first using train.py or run_pipeline.py")
+    model_path = Path(args.model)
+    if not model_path.exists():
+        print(f"Error: Model file not found: {model_path}")
+        print("Please train a model first using train.py or run_py")
         return
 
-    # Load checkpoint first to detect backbone
-    ckpt = torch.load(args.model, map_location=device)
-    state_dict = pipeline.extract_state_dict(ckpt)
-
-    # Auto-detect backbone from checkpoint if not explicitly specified
-    detected_backbone = pipeline.detect_backbone_from_checkpoint(state_dict)
-    backbone = args.backbone if args.backbone != 'mobilevit_s' else detected_backbone
-    print(f"Using backbone: {backbone} (detected: {detected_backbone})")
-
-    model = pipeline.MobileViTModel(num_classes=args.num_classes, model_name=backbone, pretrained=False)
-
-    try:
-        model.load_state_dict(state_dict)
-    except RuntimeError:
-        remapped = pipeline.remap_state_dict(state_dict)
-        try:
-            model.load_state_dict(remapped)
-        except RuntimeError as e:
-            print(f"Warning: Loading with strict=False due to: {e}")
-            model.load_state_dict(remapped, strict=False)
-
-    model = model.to(device)
-    model.eval()
-    print(f"Model loaded from {args.model}")
+    model = load_model_from_checkpoint(
+        model_path,
+        args.num_classes,
+        args.backbone,
+        device,
+    )
     
     if args.webcam:
         webcam_inference(
@@ -286,8 +257,8 @@ if __name__ == '__main__':
                        help='Image size (height and width)')
     parser.add_argument('--num-classes', type=int, default=2,
                        help='Number of classes')
-    parser.add_argument('--backbone', type=str, default='mobilevit_s',
-                       help='Backbone name (e.g., mobilevit_s, mobilevit_xs, vit_b_16)')
+    parser.add_argument('--backbone', type=str, default='auto',
+                       help='Backbone name (e.g., mobilevit_s, mobilevit_xs, vit_b_16). Use "auto" for auto-detection from checkpoint.')
     parser.add_argument(
         '--norm-mean',
         type=str,

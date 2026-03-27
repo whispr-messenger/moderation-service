@@ -5,7 +5,10 @@ scikit-learn
 opencv-python
 Pillow
 pyyaml
-torch
-torchvision
-timm
+torch>=2.0.0
+torchvision>=0.15.0
+timm>=0.9.0
 tqdm
+onnx>=1.12.0
+onnxruntime>=1.14.0
+ai-edge-torch>=0.1.0

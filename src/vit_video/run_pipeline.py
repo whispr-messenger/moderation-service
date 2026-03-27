@@ -1,4 +1,4 @@
-"""CLI runner for the MobileViT synthetic-data pipeline.
+"""CLI runner for the MobileViT synthetic-data 
   python run_pipeline.py --data-dir ./data/synthetic_food_videos --generate 0 --epochs 10
 """
 from __future__ import annotations
@@ -15,7 +15,10 @@ if _src.name == "src" and str(_src) not in sys.path:
 elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path:
     sys.path.insert(0, str(_script_dir.parent))
 
-from vit_video import pipeline
+from vit_video.utils import get_device
+from vit_video.data import DataGenerator, VideoProcessor, build_dataloaders
+from vit_video.models import MobileViTModel
+from vit_video.engine import Trainer
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,7 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    device = pipeline.get_device()
+    device = get_device()
     print("Device:", device)
 
     data_root = Path(args.data_dir)
@@ -44,7 +47,7 @@ def main() -> None:
         "unhealthy": "A high-quality photo of an unhealthy fast food meal, greasy burger and fries",
     }
 
-    generator = pipeline.DataGenerator(output_dir=data_root)
+    generator = DataGenerator(output_dir=data_root)
     if args.generate == 1:
         try:
             print("Running Stable Diffusion generation (may be slow)...")
@@ -54,7 +57,7 @@ def main() -> None:
             print("Proceeding with existing images if present.")
 
     # Convert existing images in data_root into frame folders using VideoProcessor
-    vp = pipeline.VideoProcessor(num_frames=args.frames, out_frame_size=(224, 224))
+    vp = VideoProcessor(num_frames=args.frames, out_frame_size=(224, 224))
     for label in prompts.keys():
         label_dir = data_root / label
         if not label_dir.exists():
@@ -66,14 +69,14 @@ def main() -> None:
             vp.save_video_frames(frames, out_folder, prefix=f"{label}_{i:04d}")
 
     # Build dataloaders
-    train_loader, val_loader, classes = pipeline.build_dataloaders(
+    train_loader, val_loader, classes = build_dataloaders(
         data_root, frames_per_video=args.frames, batch_size=args.batch_size
     )
 
     # Create model
-    model = pipeline.MobileViTModel(num_classes=len(classes), model_name="mobilevit_xxs", pretrained=True)
+    model = MobileViTModel(num_classes=len(classes), model_name="mobilevit_xxs", pretrained=True)
 
-    trainer = pipeline.Trainer(model=model, device=device, train_loader=train_loader, val_loader=val_loader, output_path=Path(args.out))
+    trainer = Trainer(model=model, device=device, train_loader=train_loader, val_loader=val_loader, output_path=Path(args.out))
     history = trainer.fit(epochs=min(args.epochs, 10), early_stopping_patience=args.patience)
     print("Done. Training history keys:", list(history.keys()))
 

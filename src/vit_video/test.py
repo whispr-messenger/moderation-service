@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -28,36 +28,8 @@ if _src.name == "src" and str(_src) not in sys.path:
 elif _script_dir.name == "vit_video" and str(_script_dir.parent) not in sys.path:
     sys.path.insert(0, str(_script_dir.parent))
 
-from vit_video import pipeline
-
-
-def load_model(
-    model_path: Path,
-    num_classes: int,
-    model_name: str = "mobilevit_s",
-    device: torch.device = None,
-) -> torch.nn.Module:
-    device = device or pipeline.get_device()
-    
-    checkpoint = torch.load(model_path, map_location=device)
-    state_dict = pipeline.extract_state_dict(checkpoint)
-    
-    detected = pipeline.detect_backbone_from_checkpoint(state_dict)
-    backbone = model_name if model_name != "mobilevit_s" else detected
-    print(f"Using backbone: {backbone} (detected: {detected})")
-    
-    model = pipeline.MobileViTModel(
-        num_classes=num_classes,
-        model_name=backbone,
-        pretrained=False,
-    )
-    
-    remapped = pipeline.remap_state_dict(state_dict)
-    model.load_state_dict(remapped, strict=False)
-    
-    model = model.to(device)
-    model.eval()
-    return model
+from vit_video.utils import print_device_info, parse_normalization_values, get_device, extract_state_dict, load_model_from_checkpoint
+from vit_video.data import VideoDataset
 
 
 def build_test_loader(
@@ -68,6 +40,8 @@ def build_test_loader(
     test_split: float = 0.2,
     seed: int = 42,
     filter_classes: List[str] = None,
+    norm_mean: Optional[List[float]] = None,
+    norm_std: Optional[List[float]] = None,
 ) -> Tuple[DataLoader, List[str], List[int]]:
     """
     Build a test dataloader from the dataset.
@@ -77,18 +51,20 @@ def build_test_loader(
     
     Args:
         filter_classes: If provided, only include these class folders.
+        norm_mean: Normalization mean values (ImageNet default if not specified).
+        norm_std: Normalization std values (ImageNet default if not specified).
     """
     dataset_root = Path(dataset_root)
     
     # Check for dedicated test folder
     test_dir = dataset_root / "test"
     if test_dir.exists() and any(test_dir.iterdir()):
-        ds = pipeline.VideoDataset(root=test_dir, frames_per_video=frames_per_video, classes=filter_classes)
+        ds = VideoDataset(root=test_dir, frames_per_video=frames_per_video, classes=filter_classes, mean=norm_mean, std=norm_std)
         test_loader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
         return test_loader, ds.classes, list(range(len(ds)))
     
     # Otherwise, create test split from main dataset
-    ds = pipeline.VideoDataset(root=dataset_root, frames_per_video=frames_per_video, classes=filter_classes)
+    ds = VideoDataset(root=dataset_root, frames_per_video=frames_per_video, classes=filter_classes, mean=norm_mean, std=norm_std)
     n = len(ds)
     if n == 0:
         raise RuntimeError(f"No data found in {dataset_root}")
@@ -201,20 +177,20 @@ def print_results(results: Dict) -> None:
     print(f"\nTotal samples: {results['num_samples']}")
     print(f"Classes: {results['classes']}")
     
-    print(f"\n--- Overall Metrics ---")
+    print("\n--- Overall Metrics ---")
     print(f"  Accuracy:  {results['accuracy'] * 100:.2f}%")
     print(f"  Precision: {results['precision_macro'] * 100:.2f}% (macro)")
     print(f"  Recall:    {results['recall_macro'] * 100:.2f}% (macro)")
     print(f"  F1 Score:  {results['f1_macro'] * 100:.2f}% (macro)")
-    
-    print(f"\n--- Per-Class Metrics ---")
+
+    print("\n--- Per-Class Metrics ---")
     for cls, metrics in results["per_class"].items():
         print(f"  {cls}:")
         print(f"    Precision: {metrics['precision'] * 100:.2f}%")
         print(f"    Recall:    {metrics['recall'] * 100:.2f}%")
         print(f"    F1:        {metrics['f1'] * 100:.2f}%")
-    
-    print(f"\n--- Confusion Matrix ---")
+
+    print("\n--- Confusion Matrix ---")
     cm = np.array(results["confusion_matrix"])
     header = "".join(f"{c[:8]:>10}" for c in results["classes"])
     print(f"{'Pred->':>10}{header}")
@@ -242,7 +218,7 @@ def save_results(results: Dict, output_dir: Path) -> None:
 def get_num_classes_from_checkpoint(model_path: Path) -> int:
     """Extract number of classes from checkpoint."""
     checkpoint = torch.load(model_path, map_location='cpu')
-    sd = pipeline.extract_state_dict(checkpoint)
+    sd = extract_state_dict(checkpoint)
     
     for k, v in sd.items():
         if "classifier" in k and "weight" in k:
@@ -252,14 +228,9 @@ def get_num_classes_from_checkpoint(model_path: Path) -> int:
 
 def main(args: argparse.Namespace) -> Dict:
     """Main evaluation entry point."""
-    device = pipeline.get_device()
-    print(f"Using device: {device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    if not torch.cuda.is_available():
-        print("\n[!] GPU not available. To use CUDA:")
-        print("    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
-        print()
-    
+    device = get_device()
+    print_device_info()
+
     dataset_dir = Path(args.dataset_dir)
     model_path = Path(args.model)
     
@@ -273,7 +244,11 @@ def main(args: argparse.Namespace) -> Dict:
     # Filter classes to match model if specified
     filter_classes = args.classes.split(",") if args.classes else None
 
+    # Parse normalization parameters
+    norm_mean, norm_std = parse_normalization_values(args.norm_mean, args.norm_std)
+
     # On Windows, num_workers > 0 can cause DataLoader pickle errors
+    import sys
     num_workers = 0 if sys.platform == "win32" else args.num_workers
 
     # Build test dataloader
@@ -286,13 +261,15 @@ def main(args: argparse.Namespace) -> Dict:
         test_split=args.test_split,
         seed=args.seed,
         filter_classes=filter_classes,
+        norm_mean=norm_mean,
+        norm_std=norm_std,
     )
     print(f"Classes: {classes}")
     print(f"Test samples: {len(test_loader.dataset)}")
     
     # Load model
     print(f"\nLoading model from: {model_path}")
-    model = load_model(
+    model = load_model_from_checkpoint(
         model_path=model_path,
         num_classes=num_classes,
         model_name=args.backbone,
@@ -340,8 +317,8 @@ if __name__ == "__main__":
         help="Number of data loading workers"
     )
     parser.add_argument(
-        "--backbone", type=str, default="mobilevit_s",
-        help="Backbone model name (must match training)"
+        "--backbone", type=str, default="auto",
+        help="Backbone model name (e.g., mobilevit_s, vit_b_16, etc.). Use \"auto\" for auto-detection from checkpoint."
     )
     parser.add_argument(
         "--test-split", type=float, default=0.2,
@@ -358,6 +335,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--classes", type=str, default=None,
         help="Comma-separated class names to filter (e.g., 'healthy,unhealthy')"
+    )
+    parser.add_argument(
+        "--norm-mean", type=str, default="0.485,0.456,0.406",
+        help="Comma-separated normalization mean values (must be exactly 3 values)"
+    )
+    parser.add_argument(
+        "--norm-std", type=str, default="0.229,0.224,0.225",
+        help="Comma-separated normalization std values (must be exactly 3 values)"
     )
     
     args = parser.parse_args()
