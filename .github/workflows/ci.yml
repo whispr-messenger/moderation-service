@@ -43,22 +43,20 @@ jobs:
       - name: Docker login
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USER }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set build variables
         run: |
-          echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
-          echo "SERVICE_NAME=whispr-${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./fastapi-mvp
+          file: ./fastapi-mvp/Dockerfile
           push: true
           tags: |
-            malekbh/${{ env.SERVICE_NAME }}:latest
-            malekbh/${{ env.SERVICE_NAME }}-${{ env.BUILD_DATE }}-${{ env.SHORT_SHA }}
+            ghcr.io/whispr-messenger/moderation-service:latest
+            ghcr.io/whispr-messenger/moderation-service:sha-${{ env.SHORT_SHA }}
