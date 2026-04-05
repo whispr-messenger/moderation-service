@@ -1,5 +1,6 @@
 fastapi==0.115.2
 uvicorn[standard]==0.30.6
+python-multipart>=0.0.9
 nudenet>=3.4.2
 redis>=5.0.0
 httpx>=0.27.0
