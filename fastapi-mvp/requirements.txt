@@ -4,3 +4,4 @@ python-multipart>=0.0.9
 nudenet>=3.4.2
 redis>=5.0.0
 httpx>=0.27.0
+boto3>=1.34.0
