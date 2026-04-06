@@ -5,6 +5,8 @@ import tempfile
 import logging
 import redis.asyncio as redis
 import httpx
+import boto3
+from botocore.client import Config as BotoConfig
 
 from .inference import classify_image
 
@@ -17,14 +19,30 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "whispr-media")
 
+_s3_client = None
+
+def get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client(
+            's3',
+            endpoint_url=MINIO_ENDPOINT,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            region_name='us-east-1',
+            config=BotoConfig(signature_version='s3v4', s3={'addressing_style': 'path'}),
+        )
+    return _s3_client
+
 async def download_from_s3(storage_path: str, dest_path: str):
-    """Download file from MinIO/S3 to local temp file."""
-    url = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{storage_path}"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        with open(dest_path, 'wb') as f:
-            f.write(resp.content)
+    """Download file from MinIO/S3 to local temp file using authenticated S3 GET."""
+    s3 = get_s3_client()
+    # boto3 is sync, run in thread pool to avoid blocking the event loop
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,
+        lambda: s3.download_file(MINIO_BUCKET, storage_path, dest_path),
+    )
 
 async def send_verdict(media_id: str, decision: str, score: float, category: str | None):
     """Send moderation verdict back to media-service."""
