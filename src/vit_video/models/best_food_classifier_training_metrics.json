@@ -1,0 +1,49 @@
+{
+  "timestamp_utc": "2026-04-05T05:10:55.906177+00:00",
+  "checkpoint_path": "C:\\Users\\maiab\\workspace\\moderation-service\\src\\vit_video\\models\\best_food_classifier.pth",
+  "history_path": "C:\\Users\\maiab\\workspace\\moderation-service\\src\\vit_video\\models\\best_food_classifier_history.json",
+  "dataset_dir": "C:\\Users\\maiab\\workspace\\moderation-service\\food_data\\frames",
+  "backbone": "mobilevit_xxs",
+  "classes": [
+    "healthy",
+    "unhealthy"
+  ],
+  "num_classes": 2,
+  "num_frames": 8,
+  "img_size": 224,
+  "temporal_pool": "avg",
+  "class_weighting": true,
+  "class_weights": [
+    0.9199365377426147,
+    1.0953280925750732
+  ],
+  "normalization": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "lr": 0.0001,
+  "lr_search": {
+    "enabled": false,
+    "epochs": 0,
+    "candidates": [
+      1e-05,
+      3e-05,
+      0.0001,
+      0.0003
+    ]
+  },
+  "train_samples": 6377,
+  "val_samples": 1140,
+  "best_val_accuracy": 63.771929824561404,
+  "best_val_loss": 0.9527636013598295,
+  "epochs_requested": 10,
+  "epochs_completed": 4
+}

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -6,8 +8,8 @@ from pathlib import Path
 from tqdm import tqdm
 from ..utils.model_utils import extract_state_dict, remap_state_dict
 
+
 def compute_class_weights_from_dataset(dataset: Dataset, num_classes: int) -> torch.Tensor:
-    """Compute inverse-frequency class weights for CrossEntropyLoss."""
     label_counts = [0] * num_classes
 
     if isinstance(dataset, torch.utils.data.Subset):
@@ -22,17 +24,11 @@ def compute_class_weights_from_dataset(dataset: Dataset, num_classes: int) -> to
     if total == 0:
         return torch.ones(num_classes, dtype=torch.float32)
 
-    weights = []
-    for count in label_counts:
-        if count == 0:
-            weights.append(0.0)
-        else:
-            weights.append(total / (num_classes * count))
+    weights = [total / (num_classes * c) if c > 0 else 0.0 for c in label_counts]
     return torch.tensor(weights, dtype=torch.float32)
 
-class Trainer:
-    """Trainer class to run training and validation loops."""
 
+class Trainer:
     def __init__(
         self,
         model: nn.Module,
@@ -50,25 +46,28 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+
+        label_smoothing = 0.1
         if class_weights is not None:
-            self.criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+            self.criterion = nn.CrossEntropyLoss(weight=class_weights.to(device), label_smoothing=label_smoothing)
         else:
-            self.criterion = nn.CrossEntropyLoss()
+            self.criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+
         self.output_path = Path(output_path) if output_path is not None else Path("./models")
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.max_grad_norm = max_grad_norm
+        self.scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None
 
-        self.use_amp = True if getattr(device, "type", "cpu") == "cuda" else False
+        self.use_amp = getattr(device, "type", "cpu") == "cuda"
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
     def _train_one_epoch(self) -> Tuple[float, float]:
         self.model.train()
         running_loss = 0.0
-        preds = []
-        targets = []
+        correct = 0
+        total = 0
         for x, y in tqdm(self.train_loader, desc="train", leave=False):
-            x = x.to(self.device)
-            y = y.to(self.device)
+            x, y = x.to(self.device), y.to(self.device)
             if self.use_amp:
                 with torch.cuda.amp.autocast():
                     logits = self.model(x)
@@ -88,22 +87,19 @@ class Trainer:
                 self.optimizer.step()
 
             running_loss += loss.item() * x.size(0)
-            preds.extend(torch.argmax(logits, dim=1).cpu().numpy().tolist())
-            targets.extend(y.cpu().numpy().tolist())
+            correct += (torch.argmax(logits, dim=1) == y).sum().item()
+            total += y.size(0)
 
-        avg_loss = running_loss / len(self.train_loader.dataset)
-        acc = 100.0 * (sum(1 for i, j in zip(targets, preds) if i == j) / len(targets)) if len(targets) > 0 else 0.0
-        return avg_loss, acc
+        return running_loss / total, 100.0 * correct / total if total else 0.0
 
     def _validate(self) -> Tuple[float, float]:
         self.model.eval()
         running_loss = 0.0
-        preds = []
-        targets = []
+        correct = 0
+        total = 0
         with torch.no_grad():
             for x, y in tqdm(self.val_loader, desc="val", leave=False):
-                x = x.to(self.device)
-                y = y.to(self.device)
+                x, y = x.to(self.device), y.to(self.device)
                 if self.use_amp:
                     with torch.cuda.amp.autocast():
                         logits = self.model(x)
@@ -112,12 +108,10 @@ class Trainer:
                     logits = self.model(x)
                     loss = self.criterion(logits, y)
                 running_loss += loss.item() * x.size(0)
-                preds.extend(torch.argmax(logits, dim=1).cpu().numpy().tolist())
-                targets.extend(y.cpu().numpy().tolist())
+                correct += (torch.argmax(logits, dim=1) == y).sum().item()
+                total += y.size(0)
 
-        avg_loss = running_loss / len(self.val_loader.dataset)
-        acc = 100.0 * (sum(1 for i, j in zip(targets, preds) if i == j) / len(targets)) if len(targets) > 0 else 0.0
-        return avg_loss, acc
+        return running_loss / total, 100.0 * correct / total if total else 0.0
 
     def fit(
         self,
@@ -129,18 +123,21 @@ class Trainer:
     ) -> Dict[str, List[float]]:
         best_val_loss = float("inf")
         patience_counter = 0
-        history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
+        history: Dict[str, List[float]] = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
+
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, T_max=epochs, eta_min=1e-6
+        )
 
         if resume_from is not None and Path(resume_from).exists():
             ck = torch.load(resume_from, map_location=self.device)
-            sd = extract_state_dict(ck)
-            self.model.load_state_dict(remap_state_dict(sd), strict=False)
+            self.model.load_state_dict(remap_state_dict(extract_state_dict(ck)), strict=False)
             if isinstance(ck, dict) and "optimizer_state_dict" in ck:
                 try:
                     self.optimizer.load_state_dict(ck["optimizer_state_dict"])
                 except Exception:
                     pass
-            print(f"Resumed training from checkpoint: {resume_from}")
+            print(f"Resumed from: {resume_from}")
 
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = self._train_one_epoch()
@@ -151,22 +148,23 @@ class Trainer:
             history["train_acc"].append(train_acc)
             history["val_acc"].append(val_acc)
 
-            print(f"Epoch {epoch}/{epochs}: train_loss={train_loss:.4f} val_loss={val_loss:.4f} train_acc={train_acc:.4f} val_acc={val_acc:.4f}")
+            lr = self.optimizer.param_groups[0]["lr"]
+            print(f"Epoch {epoch}/{epochs}: train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
+                  f"train_acc={train_acc:.2f}% val_acc={val_acc:.2f}% lr={lr:.2e}")
+
+            self.scheduler.step()
 
             if val_loss < best_val_loss - min_delta:
                 best_val_loss = val_loss
                 patience_counter = 0
                 ckpt = self.output_path / checkpoint_name
-                torch.save(
-                    {
-                        "model_state_dict": self.model.state_dict(),
-                        "optimizer_state_dict": self.optimizer.state_dict(),
-                        "best_val_loss": best_val_loss,
-                        "epoch": epoch,
-                    },
-                    ckpt,
-                )
-                print(f"Saved improved model to {ckpt} (val_loss={best_val_loss:.4f})")
+                torch.save({
+                    "model_state_dict": self.model.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "best_val_loss": best_val_loss,
+                    "epoch": epoch,
+                }, ckpt)
+                print(f"Saved model to {ckpt} (val_loss={best_val_loss:.4f})")
             else:
                 patience_counter += 1
                 print(f"No improvement (patience {patience_counter}/{early_stopping_patience})")

@@ -1,4 +1,5 @@
-# Dataset
+# Dataset (downloads + extracted frames live under package dir)
+food_data/
 food_video_dataset/
 *_images/
 

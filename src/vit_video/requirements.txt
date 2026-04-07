@@ -12,9 +12,12 @@ ipython>=8.12.0
 jupyter>=1.0.0
 requests>=2.31.0
 
-# Data generation (generatedata.py: YouTube download + frame extraction)
+# Data generation
 yt-dlp>=2024.1.0
 imageio-ffmpeg>=0.4.0
+
+# Hugging Face upload
+huggingface-hub>=0.20.0
 
 # Optional: ONNX export
 onnx>=1.14.0

@@ -1,5 +1,5 @@
-import sys
 import torch
+
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
@@ -13,16 +13,14 @@ def get_device() -> torch.device:
         return torch.device("mps")
     return torch.device("cpu")
 
-def print_device_info() -> None:
-    """Print device and CUDA availability info."""
-    device = get_device()
-    print(f"Using device: {device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    if not torch.cuda.is_available():
-        print("\n[!] GPU not available. To enable CUDA:")
-        print("    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
-        print()
 
-def get_num_workers() -> int:
-    """Get platform-aware number of workers for DataLoader."""
-    return 0 if sys.platform == "win32" else 4
+def print_device_info(*, hint_cuda: bool = False) -> None:
+    """One-line device summary. Set ``hint_cuda=True`` to print CUDA wheel hint when on CPU."""
+    device = get_device()
+    cuda = torch.cuda.is_available()
+    print(f"Device: {device}  (CUDA: {cuda})")
+    if hint_cuda and not cuda:
+        print(
+            "Tip: CUDA build — pip install torch torchvision "
+            "--index-url https://download.pytorch.org/whl/cu124"
+        )
