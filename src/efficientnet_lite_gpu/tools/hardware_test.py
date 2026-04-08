@@ -110,7 +110,7 @@ def _scan_bad_images(root_dir: str | Path):
 
         try:
             img_bytes = tf.io.read_file(str(p))
-            _ = tf.image.decode_image(img_bytes)  # 尝试解码
+            _ = tf.image.decode_image(img_bytes)  # tentative de décodage
         except Exception as e:
             print(f"[Error decode] {p} -> {e}")
             bad_files.append(p)

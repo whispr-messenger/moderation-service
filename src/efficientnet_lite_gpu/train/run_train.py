@@ -10,7 +10,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support
 )
 import tensorflow as tf
-# from tensorflow.keras import mixed_precision  # 混合精度需TensorFlow>=2.10
+# from tensorflow.keras import mixed_precision  # précision mixte : TensorFlow>=2.10
 
 DATA_DIR = Path("../../Food Classification dataset/Train")
 TEST_DIR = DATA_DIR.parent / "Test"
@@ -21,7 +21,7 @@ FINE_TUNE_EPOCHS = 100
 
 # mixed_precision.set_global_policy('mixed_float16')
 
-tf.config.optimizer.set_jit(False)  # 关闭XLA以避免无关日志
+tf.config.optimizer.set_jit(False)  # désactiver XLA pour limiter le bruit dans les logs
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
 
@@ -386,7 +386,7 @@ best_metrics = {
 with open("../efficientnet_lite/training_logs/best_metrics.json", "w", encoding="utf-8") as f:
     json.dump(best_metrics, f, ensure_ascii=False, indent=2)
 
-# 再保存一份训练历史到日志目录（可与results里相同或额外信息）
+# sauvegarder aussi l'historique d'entraînement dans le répertoire des logs (identique ou complémentaire à results)
 with open("../efficientnet_lite/training_logs/training_history.json", "w", encoding="utf-8") as f:
     json.dump(combined_history, f, ensure_ascii=False, indent=2)
 

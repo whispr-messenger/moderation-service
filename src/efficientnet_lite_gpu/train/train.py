@@ -44,7 +44,7 @@ def _build_paths(train_cfg: dict) -> dict:
     paths = {
         "dataset_root": dataset_root,
         "train_dir": dataset_root / train_cfg["train_dir"],   # e.g. .../Train
-        "val_dir":   dataset_root / train_cfg["val_dir"],     # e.g. .../Val（如果你以后用单独 Val）
+        "val_dir":   dataset_root / train_cfg["val_dir"],     # ex. .../Val (si vous utilisez un dossier Val dédié plus tard)
         "test_dir":  dataset_root / train_cfg["test_dir"],    # e.g. .../Test
 
         "results_root": results_root,

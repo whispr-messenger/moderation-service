@@ -88,7 +88,7 @@ def validate_config() -> dict:
     _require_str(val_dir, "train_config.val_dir")
     _require_str(test_dir, "train_config.test_dir")
 
-    # 提示：如果子目录以 "/" 开头，会导致 Path 拼接失效
+    # Attention : un sous-chemin commençant par « / » est absolu et casse la concaténation Path
     for name, sub in [("train_dir", train_dir), ("val_dir", val_dir), ("test_dir", test_dir)]:
         if sub.startswith("/"):
             print(f"{YELLOW}⚠️ {name} starts with '/', Path join will treat it as absolute path. "

@@ -17,14 +17,14 @@ def check_nvidia_driver_and_cuda():
             print(f"{YELLOW}{err}{RESET}")
         return None
 
-    # 简单解析：第一行和 “CUDA Version”
-    print(out)  # 如果你不想全打出来，可以只解析版本
+    # analyse simple : première ligne contenant « CUDA Version »
+    print(out)  # vous pouvez ne parser que la version si vous ne voulez pas tout afficher
     driver_version = None
     cuda_version = None
 
     for line in out.splitlines():
         if "Driver Version" in line and "CUDA Version" in line:
-            # 例子：| NVIDIA-SMI 550.54.14    Driver Version: 550.54.14    CUDA Version: 12.4 |
+            # ex. : | NVIDIA-SMI 550.54.14    Driver Version: 550.54.14    CUDA Version: 12.4 |
             parts = line.split("Driver Version:")
             if len(parts) > 1:
                 driver_version = parts[1].split()[0]
@@ -63,7 +63,7 @@ def check_nvcc():
 
     cuda_toolkit_version = None
     for line in out.splitlines():
-        # 典型行：Cuda compilation tools, release 12.4, V12.4.99
+        # ligne typique : Cuda compilation tools, release 12.4, V12.4.99
         if "release" in line and "Cuda compilation tools" in line:
             parts = line.split("release")
             if len(parts) > 1:
