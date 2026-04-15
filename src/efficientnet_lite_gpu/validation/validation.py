@@ -1,16 +1,21 @@
+import sys
 from pathlib import Path
+
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+# Import the canonical health-label mapping (src/common/health_labels.py).
+try:
+    from common.health_labels import HEALTH_LABELS, UNHEALTHY_CLASSES
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from common.health_labels import HEALTH_LABELS, UNHEALTHY_CLASSES
 
-# Quelles classes sont considérées comme junk food
-JUNK_CLASSES = {"Burger", "Crispy Chicken", "Donut", "Fries", "Hot Dog", "Pizza"}
 
-
-def _resolve_path(base_dir: Path, value: str | None, fallback: Path) -> Path:
+def _resolve_path(base_dir: Path, value, fallback: Path) -> Path:
     if not value:
         return fallback.resolve()
     p = Path(value)
@@ -19,7 +24,7 @@ def _resolve_path(base_dir: Path, value: str | None, fallback: Path) -> Path:
     return (base_dir / p).resolve()
 
 
-def _load_class_names(dataset_dir: Path) -> list[str]:
+def _load_class_names(dataset_dir: Path):
     if not dataset_dir.exists():
         raise FileNotFoundError(
             f"Dataset directory not found for validation: {dataset_dir}"
@@ -36,51 +41,47 @@ def _load_class_names(dataset_dir: Path) -> list[str]:
     return class_names
 
 
-def preprocess_image(img_path: Path):
-    # Prétraitement minimal aligné sur la taille attendue par le modèle.
+def preprocess_image(img_path):
     img = cv2.imread(str(img_path))
     if img is None:
         raise FileNotFoundError(
             f"Impossible de lire l'image : {img_path}. Vérifiez que le fichier existe et que le chemin est correct."
         )
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (224, 224))  # taille attendue par ton modèle
+    img = cv2.resize(img, (224, 224))
     img = img.astype("float32")
     img = np.expand_dims(img, axis=0)
     return img
 
 
-def predict_image(model, class_names: list[str], img_path: Path, threshold=0.9):
+def predict_image(model, class_names, img_path, threshold=0.9):
     img = preprocess_image(img_path)
-    preds = model.predict(img, verbose=0)[0]   # vecteur de probabilités
+    preds = model.predict(img, verbose=0)[0]
     best_idx = int(np.argmax(preds))
     best_prob = float(preds[best_idx])
     best_class = class_names[best_idx]
 
-    # Affichage détaillé utile pour diagnostiquer les classes proches.
     for name, p in zip(class_names, preds):
         print(f"  {name}: {float(p):.2%}")
 
-    # Est-ce une junk food ?
-    is_junk = best_class in JUNK_CLASSES
+    is_unhealthy = best_class in UNHEALTHY_CLASSES
 
     if best_prob >= threshold:
-        junk_text = "OUI" if is_junk else "NON"
+        health = HEALTH_LABELS.get(best_class, "unknown")
         result = (
-            f"Catégorie prédite : {best_class} ({best_prob:.2%})\n"
-            f"Junk food : {junk_text}"
+            f"Predicted: {best_class} ({best_prob:.2%})\n"
+            f"Health: {health} | Unhealthy: {'YES' if is_unhealthy else 'NO'}"
         )
     else:
         result = (
-            f"Prédiction incertaine (meilleure catégorie : {best_class} "
-            f"avec {best_prob:.2%} < {threshold:.0%})\n"
-            f"Junk food : Non"
+            f"Uncertain (best: {best_class} "
+            f"at {best_prob:.2%} < {threshold:.0%})"
         )
 
     return result
 
 
-def show_prediction(model, class_names: list[str], img_path: Path, threshold=0.9, show_plot=True):
+def show_prediction(model, class_names, img_path, threshold=0.9, show_plot=True):
     img = cv2.imread(str(img_path))
     if img is None:
         raise FileNotFoundError(
@@ -97,7 +98,6 @@ def show_prediction(model, class_names: list[str], img_path: Path, threshold=0.9
 
 
 def run(cfg: dict):
-    # Point d'entrée "eval/validation" appelé depuis main.py.
     module_root = Path(__file__).resolve().parents[1]
     train_cfg = cfg.get("train_config", {})
     comp_cfg = cfg.get("compilation_config", {})

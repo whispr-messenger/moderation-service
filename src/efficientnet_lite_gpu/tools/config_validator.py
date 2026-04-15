@@ -63,10 +63,10 @@ def validate_config() -> dict:
     # ======================
     #   train_config
     # ======================
-    training_device = _require_key(train_cfg, "training_divice", "train_config")
-    _require_str(training_device, "train_config.training_divice")
+    training_device = _require_key(train_cfg, "training_device", "train_config")
+    _require_str(training_device, "train_config.training_device")
     if training_device not in ("cpu", "gpu"):
-        print(f"{YELLOW}⚠️ training_divice is '{training_device}', expected 'cpu' or 'gpu'{RESET}")
+        print(f"{YELLOW}⚠️ training_device is '{training_device}', expected 'cpu' or 'gpu'{RESET}")
 
     mixed_precision = _require_key(train_cfg, "mixed_precision", "train_config")
     _require_bool(mixed_precision, "train_config.mixed_precision")
@@ -92,7 +92,7 @@ def validate_config() -> dict:
     _require_str(val_dir, "train_config.val_dir")
     _require_str(test_dir, "train_config.test_dir")
 
-    # 提示：如果子目录以 "/" 开头，会导致 Path 拼接失效
+    # Warn if subdirectory starts with "/" which breaks Path.join
     for name, sub in [("train_dir", train_dir), ("val_dir", val_dir), ("test_dir", test_dir)]:
         if sub.startswith("/"):
             print(f"{YELLOW}⚠️ {name} starts with '/', Path join will treat it as absolute path. "
@@ -179,8 +179,8 @@ def validate_config() -> dict:
     disable_xla = _require_key(sys_cfg, "disable_XLA_logs", "sys_config")
     _require_bool(disable_xla, "sys_config.disable_XLA_logs")
 
-    allow_growth = _require_key(sys_cfg, "tf_fore_gpu_allow_growth", "sys_config")
-    _require_bool(allow_growth, "sys_config.tf_fore_gpu_allow_growth")
+    allow_growth = _require_key(sys_cfg, "tf_force_gpu_allow_growth", "sys_config")
+    _require_bool(allow_growth, "sys_config.tf_force_gpu_allow_growth")
 
     # ======================
     #   compilation_config

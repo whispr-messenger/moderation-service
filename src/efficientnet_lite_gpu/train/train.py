@@ -31,7 +31,7 @@ def _apply_sys_config(sys_cfg: dict, train_cfg: dict):
     if sys_cfg.get("disable_XLA_logs", True):
         tf.config.optimizer.set_jit(False)
 
-    if sys_cfg.get("tf_fore_gpu_allow_growth", True):
+    if sys_cfg.get("tf_force_gpu_allow_growth", True):
         os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
     if train_cfg.get("mixed_precision", False):
@@ -48,9 +48,9 @@ def _build_paths(train_cfg: dict) -> dict:
 
     paths = {
         "dataset_root": dataset_root,
-        "train_dir": dataset_root / train_cfg["train_dir"],   # e.g. .../Train
-        "val_dir":   dataset_root / train_cfg["val_dir"],     # e.g. .../Val（如果你以后用单独 Val）
-        "test_dir":  dataset_root / train_cfg["test_dir"],    # e.g. .../Test
+        "train_dir": dataset_root / train_cfg["train_dir"],
+        "val_dir":   dataset_root / train_cfg["val_dir"],
+        "test_dir":  dataset_root / train_cfg["test_dir"],
 
         "results_root": results_root,
         "data_exploration_dir": results_root / train_cfg["data_exploration_dir"],
@@ -997,8 +997,6 @@ def _evaluate_and_save(train_cfg: dict,
     with open(logs_dir / "best_metrics.json", "w", encoding="utf-8") as f:
         json.dump(_to_json_safe(best_metrics), f, ensure_ascii=False, indent=2)
 
-    combined_history = _to_json_safe(combined_history)
-
     with open(logs_dir / "training_history.json", "w", encoding="utf-8") as f:
         json.dump(combined_history, f, ensure_ascii=False, indent=2)
 
@@ -1009,9 +1007,6 @@ def _evaluate_and_save(train_cfg: dict,
 
 
 def _to_json_safe(obj):
-    import numpy as np
-    import tensorflow as tf
-
     if isinstance(obj, dict):
         return {k: _to_json_safe(v) for k, v in obj.items()}
     elif isinstance(obj, list):

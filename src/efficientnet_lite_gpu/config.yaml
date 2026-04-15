@@ -1,5 +1,5 @@
 train_config:
-  training_divice: gpu
+  training_device: cpu
   mixed_precision: false
   dataset_dir: train/dataset_merged
   raw_dataset_dir: train/dataset_raw_cleaned
@@ -54,7 +54,7 @@ train_config:
       min_lr: 1.0e-06
 sys_config:
   disable_XLA_logs: true
-  tf_fore_gpu_allow_growth: true
+  tf_force_gpu_allow_growth: true
 compilation_config:
   compiler: gcc
   compiler_args: []

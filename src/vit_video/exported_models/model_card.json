@@ -1,0 +1,109 @@
+{
+  "model_name": "auto",
+  "task": "video_classification",
+  "training_date_utc": "2026-04-05T05:15:09.506518+00:00",
+  "checkpoint_path": "C:\\Users\\maiab\\workspace\\moderation-service\\src\\vit_video\\models\\best_food_classifier.pth",
+  "num_classes": 2,
+  "classes": [
+    "healthy",
+    "unhealthy"
+  ],
+  "input_shape": {
+    "batch": 1,
+    "frames": 8,
+    "channels": 3,
+    "height": 224,
+    "width": 224
+  },
+  "input_format": "BTCHW",
+  "normalization": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "exported_formats": [
+    "torchscript",
+    "onnx"
+  ],
+  "framework": "pytorch",
+  "backbone": "auto",
+  "evaluation": {
+    "num_samples": 1560,
+    "accuracy": 0.7211538461538461,
+    "precision_macro": 0.7208331432221563,
+    "recall_macro": 0.7160714285714286,
+    "f1_macro": 0.7169998986604411,
+    "per_class": {
+      "healthy": {
+        "precision": 0.7227722772277227,
+        "recall": 0.7821428571428571,
+        "f1": 0.7512864493996569
+      },
+      "unhealthy": {
+        "precision": 0.7188940092165899,
+        "recall": 0.65,
+        "f1": 0.6827133479212254
+      }
+    },
+    "classes": [
+      "healthy",
+      "unhealthy"
+    ]
+  },
+  "training": {
+    "timestamp_utc": "2026-04-05T05:10:55.906177+00:00",
+    "checkpoint_path": "C:\\Users\\maiab\\workspace\\moderation-service\\src\\vit_video\\models\\best_food_classifier.pth",
+    "history_path": "C:\\Users\\maiab\\workspace\\moderation-service\\src\\vit_video\\models\\best_food_classifier_history.json",
+    "dataset_dir": "C:\\Users\\maiab\\workspace\\moderation-service\\food_data\\frames",
+    "backbone": "mobilevit_xxs",
+    "classes": [
+      "healthy",
+      "unhealthy"
+    ],
+    "num_classes": 2,
+    "num_frames": 8,
+    "img_size": 224,
+    "temporal_pool": "avg",
+    "class_weighting": true,
+    "class_weights": [
+      0.9199365377426147,
+      1.0953280925750732
+    ],
+    "normalization": {
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "lr": 0.0001,
+    "lr_search": {
+      "enabled": false,
+      "epochs": 0,
+      "candidates": [
+        1e-05,
+        3e-05,
+        0.0001,
+        0.0003
+      ]
+    },
+    "train_samples": 6377,
+    "val_samples": 1140,
+    "best_val_accuracy": 63.771929824561404,
+    "best_val_loss": 0.9527636013598295,
+    "epochs_requested": 10,
+    "epochs_completed": 4
+  }
+}

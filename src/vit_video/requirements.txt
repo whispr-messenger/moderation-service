@@ -1,0 +1,37 @@
+# Core dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+timm>=0.9.12
+opencv-python>=4.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+scikit-learn>=1.3.0
+seaborn>=0.12.0
+tqdm>=4.65.0
+ipython>=8.12.0
+jupyter>=1.0.0
+requests>=2.31.0
+
+# Data generation
+yt-dlp>=2024.1.0
+imageio-ffmpeg>=0.4.0
+
+# Hugging Face upload
+huggingface-hub>=0.20.0
+
+# Optional: ONNX export
+onnx>=1.14.0
+onnxruntime>=1.15.0
+
+# Optional: CoreML export (macOS/iOS)
+# coremltools>=7.0
+
+# Optional: TFLite export (Android)
+# ai-edge-torch>=0.1.0
+# tensorflow>=2.13.0
+
+# Optional: TFJS export (browser). Needs tensorflow + onnx-tf for the PyTorch path.
+# tensorflowjs>=4.17.0
+# onnx-tf>=1.10.0
+
+

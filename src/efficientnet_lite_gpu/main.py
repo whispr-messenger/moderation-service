@@ -10,6 +10,7 @@ ACTIONS = {
     "train": ("train.train", "run"),
     "eval": ("validation.validation", "run"),
     "validation": ("validation.validation", "run"),
+    "eval_tflite": ("validation.validation_tflite", "run"),
     "test": ("test.test", "run"),
 }
 
@@ -22,31 +23,19 @@ def _resolve_action_func(action: str):
 def init(args):
     action = args.action
     model_name = args.model
-    # Point d'entrée unique : prépare la config puis délègue à l'action demandée.
 
-    # Check environment
-    # ht.check_requirement()
-    # ht.check_python_version()
-    # ht.check_tf_gpu_usable()
-
-    # Create configuration file
     config(model_name=model_name)
 
-    # check valid config
     cfg = validate_config()
 
-    # check train dataset dir
-    # ht.check_train_dataset_dir(cfg)
-
-    # check train results dir
-    # ht.check_train_results_dir(cfg)
+    ht.check_train_dataset_dir(cfg)
+    ht.check_train_results_dir(cfg)
 
     if action not in ACTIONS:
         print(f"Unknown action: {action}")
-        print("Available actions: train | eval | validation | test")
+        print("Available actions: train | eval | validation | eval_tflite | test")
         sys.exit(1)
 
-    # Les options validation sont injectées dans cfg pour un passage uniforme.
     cfg["validation_config"] = {
         "image_path": args.validation_image,
         "threshold": args.validation_threshold,
@@ -55,10 +44,8 @@ def init(args):
         "show_plot": not args.validation_no_display,
     }
 
-    # Résolution de l'action CLI vers la fonction métier correspondante (lazy import).
     func = _resolve_action_func(action)
 
-    # On transmet la même configuration validée à tous les sous-modules.
     sig = inspect.signature(func)
     if len(sig.parameters) == 0:
         func()
@@ -73,7 +60,7 @@ def parse_args():
         dest="action",
         required=True,
         choices=ACTIONS.keys(),
-        help="What to do: train | eval | validation | test",
+        help="What to do: train | eval | validation | eval_tflite | test",
     )
 
     parser.add_argument(

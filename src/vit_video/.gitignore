@@ -1,0 +1,36 @@
+# Dataset (downloads + extracted frames live under package dir)
+food_data/
+food_video_dataset/
+*_images/
+
+# Model checkpoints
+*.pth
+*.pt
+*.ckpt
+
+# Training outputs
+training_history.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

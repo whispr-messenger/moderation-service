@@ -1,5 +1,5 @@
-# CUDA 12.3 + cuDNN
-FROM nvidia/cuda:12.3.2-cudnn8-runtime-ubuntu22.04
+# CUDA 12.4 + cuDNN 9
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
