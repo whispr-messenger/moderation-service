@@ -16,6 +16,21 @@ A service for content moderation and classification using various AI models. It 
 - GPU training support via NVIDIA CUDA
 - FastAPI MVP pour l'API de modération
 
+## Architecture
+
+```
+┌──────────────┐     ┌────────────────────┐
+│ Media Service│────▶│ Moderation Service │
+└──────────────┘     └────────┬───────────┘
+                              │
+                    ┌─────────┼──────────┐
+                    │         │          │
+              ┌─────▼────┐ ┌──▼───────┐ ┌▼──────────┐
+              │ EfficientNet│ │ FastAPI │ │ TFLite   │
+              │ Lite     │ │  MVP    │ │ Models   │
+              └──────────┘ └─────────┘ └──────────┘
+```
+
 ## Installation
 
 1. Clone the repository:
