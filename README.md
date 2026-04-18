@@ -2,11 +2,19 @@
 
 A service for content moderation and classification using various AI models. It analyses images and videos uploaded by users to detect inappropriate content before distribution.
 
+## Tech Stack
+
+- **Langage** : Python 3.10+
+- **Framework API** : FastAPI
+- **ML** : TensorFlow, EfficientNet-Lite
+- **Conteneurisation** : Docker
+
 ## Features
 
 - Image classification using EfficientNet-Lite
 - Food image detection and classification
-- More features coming soon!
+- GPU training support via NVIDIA CUDA
+- FastAPI MVP pour l'API de modération
 
 ## Installation
 
