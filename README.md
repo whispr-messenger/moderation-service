@@ -80,3 +80,11 @@ Or use the test script:
 ```bash
 python test_food_classifier.py --download
 ```
+
+## Docker
+
+```bash
+docker-compose up -d
+```
+
+Le service est accessible sur `http://localhost:8000/docs` (Swagger UI).
