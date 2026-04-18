@@ -1,6 +1,6 @@
 # Moderation Service
 
-A service for content moderation and classification using various AI models.
+A service for content moderation and classification using various AI models. It analyses images and videos uploaded by users to detect inappropriate content before distribution.
 
 ## Features
 
