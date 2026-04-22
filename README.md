@@ -1,58 +1,90 @@
 # Moderation Service
 
-This repository currently focuses on the EfficientNet GPU training and validation pipeline for image moderation tasks.
+A service for content moderation and classification using various AI models. It analyses images and videos uploaded by users to detect inappropriate content before distribution.
 
-## Quick Start
+## Tech Stack
 
-1. Clone the repository and enter the project:
+- **Langage** : Python 3.10+
+- **Framework API** : FastAPI
+- **ML** : TensorFlow, EfficientNet-Lite
+- **Conteneurisation** : Docker
 
+## Features
+
+- Image classification using EfficientNet-Lite
+- Food image detection and classification
+- GPU training support via NVIDIA CUDA
+- FastAPI MVP pour l'API de modération
+
+## Architecture
+
+```
+┌──────────────┐     ┌────────────────────┐
+│ Media Service│────▶│ Moderation Service │
+└──────────────┘     └────────┬───────────┘
+                              │
+                    ┌─────────┼──────────┐
+                    │         │          │
+              ┌─────▼────┐ ┌──▼───────┐ ┌▼──────────┐
+              │ EfficientNet│ │ FastAPI │ │ TFLite   │
+              │ Lite     │ │  MVP    │ │ Models   │
+              └──────────┘ └─────────┘ └──────────┘
+```
+
+## Installation
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/whispr-messenger/moderation-service.git
 cd moderation-service
 ```
 
-2. Switch to the active module directory:
-
-```bash
-cd src/efficientnet_lite_gpu
-```
-
-3. Install dependencies:
-
+2. Install the requirements:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Run pipeline actions:
+## Usage
 
-```bash
-python main.py --action train
-python main.py --action eval
-python main.py --action test
+### Food Image Classification
+
+You can use the food classification model to identify food items in images:
+
+```python
+from src.efficientnet_lite import classify_image
+
+# Classify an image
+results = classify_image(image_path="path/to/your/image.jpg")
+print(results)
 ```
 
-## Dataset Fetch (Optional)
-
-If you only need the dataset fetch tool dependencies:
+Or use the test script:
 
 ```bash
-pip install -r requirements-fetch-only.txt
+python test_food_classifier.py --image path/to/your/image.jpg
 ```
 
-Dry-run fetch command:
+### Download Models
+
+For first-time use, you may need to download the models:
+
+```python
+from src.efficientnet_lite.food_classifier import download_model
+
+model_path = download_model()
+print(f"Model downloaded to: {model_path}")
+```
+
+Or use the test script:
 
 ```bash
-python -m tools.fetch_google_dataset --dry-run
+python test_food_classifier.py --download
 ```
 
-Windows helpers:
+## Docker
 
-- `run_fetch_google_dataset.bat`
-- `run_fetch_google_dataset_dry_run.bat`
+```bash
+docker-compose up -d
+```
 
-## Documentation
-
-- Project index: `documentation/PROJECT_INDEX.md`
-- Module guide: `src/efficientnet_lite_gpu/README.md`
-- Windows long path setup: `documentation/WINDOWS_LONG_PATHS.md`
-- Architecture reference: `documentation/1_architecture/1_system_design.md`
+Le service est accessible sur `http://localhost:8000/docs` (Swagger UI).
