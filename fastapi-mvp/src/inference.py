@@ -1,5 +1,8 @@
-from nudenet import NudeDetector
 import logging
+import os
+import time
+
+from nudenet import NudeDetector
 
 logger = logging.getLogger("moderation")
 
@@ -13,23 +16,28 @@ UNSAFE_CATEGORIES = {
     "MALE_BREAST_EXPOSED",
 }
 
-# Threshold for blocking
-BLOCK_THRESHOLD = 0.6
+# Threshold for blocking, env-driven (0.0 - 1.0)
+BLOCK_THRESHOLD = float(os.getenv("MOD_BLOCK_THRESHOLD", "0.6"))
 
 detector = None
+
 
 def load_model():
     global detector
     if detector is None:
         logger.info("Loading NudeNet model...")
+        t0 = time.perf_counter()
         detector = NudeDetector()
-        logger.info("NudeNet model loaded")
+        logger.info("NudeNet model loaded in %.2fs", time.perf_counter() - t0)
     return detector
+
 
 def classify_image(image_path: str) -> dict:
     """Classify an image and return moderation decision."""
     model = load_model()
+    t0 = time.perf_counter()
     detections = model.detect(image_path)
+    latency_ms = (time.perf_counter() - t0) * 1000.0
 
     # Find the most unsafe detection
     max_unsafe_score = 0.0
@@ -42,12 +50,18 @@ def classify_image(image_path: str) -> dict:
             max_unsafe_score = score
             max_category = label
 
+    logger.info(
+        "inference done path=%s latency_ms=%.1f detections=%d top=%s score=%.3f",
+        image_path, latency_ms, len(detections), max_category, max_unsafe_score,
+    )
+
     if max_unsafe_score >= BLOCK_THRESHOLD:
         return {
             "decision": "rejected",
             "confidence": round(max_unsafe_score, 4),
             "category": max_category,
             "all_detections": len(detections),
+            "latency_ms": round(latency_ms, 1),
         }
 
     return {
@@ -55,4 +69,5 @@ def classify_image(image_path: str) -> dict:
         "confidence": round(1.0 - max_unsafe_score, 4),
         "category": None,
         "all_detections": len(detections),
+        "latency_ms": round(latency_ms, 1),
     }
