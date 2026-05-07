@@ -1,1 +1,15 @@
 .venv
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+*.key
+*.pem
+*.crt
+.git
+.idea
+.vscode
+*.bat
+README.md
+requirements-fetch-only.txt

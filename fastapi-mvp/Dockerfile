@@ -10,15 +10,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download NudeNet model so startup is fast and reproducible
-RUN python -c "from nudenet import NudeDetector; NudeDetector()"
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 
-COPY src/ src/
+COPY --chown=appuser:appuser src/ src/
 
 ENV PYTHONUNBUFFERED=1 \
     MOD_BLOCK_THRESHOLD=0.6 \
     MOD_MAX_UPLOAD_MB=10 \
-    MOD_RATE_LIMIT=30/minute
+    MOD_RATE_LIMIT=30/minute \
+    HOME=/home/appuser
+
+USER appuser
+
+# Pre-download NudeNet model so startup is fast and reproducible
+RUN python -c "from nudenet import NudeDetector; NudeDetector()"
 
 EXPOSE 8000
 
