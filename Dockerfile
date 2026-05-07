@@ -23,4 +23,7 @@ COPY src/ ./src/
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 CMD ["python", "src/efficientnet_lite/main.py"]
