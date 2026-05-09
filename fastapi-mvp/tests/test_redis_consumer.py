@@ -58,4 +58,61 @@ async def test_process_message_accepts_safe_path():
             "mediaId": "m2",
             "storagePath": "media/ok.jpg",
         })
-    sv.assert_called_once()
+    sv.assert_called_once_with("m2", "approved", 0.9, None)
+
+
+@pytest.mark.asyncio
+async def test_process_message_inference_error_marks_pending():
+    """Si classify_image plante, on doit marquer pending PAS approved.
+    Sinon un attaquant qui crashe l'inference bypass la moderation.
+    """
+    def boom(_path):
+        raise RuntimeError("nudenet crashed on craft image")
+
+    with patch.object(redis_consumer, "download_from_s3", new=AsyncMock()), \
+         patch.object(redis_consumer, "send_verdict", new=AsyncMock()) as sv, \
+         patch.object(redis_consumer, "classify_image", side_effect=boom):
+        await redis_consumer.process_message({
+            "mediaId": "m3",
+            "storagePath": "media/crash.jpg",
+        })
+
+    sv.assert_called_once_with("m3", "pending", 0.0, None)
+
+
+@pytest.mark.asyncio
+async def test_process_message_inference_timeout_marks_pending():
+    """Si l'inference depasse le timeout, on doit marquer pending."""
+    def slow(_path):
+        # bloque assez longtemps pour declencher asyncio.wait_for
+        import time
+        time.sleep(2.0)
+        return {"decision": "approved", "confidence": 0.9, "category": None}
+
+    with patch.object(redis_consumer, "download_from_s3", new=AsyncMock()), \
+         patch.object(redis_consumer, "send_verdict", new=AsyncMock()) as sv, \
+         patch.object(redis_consumer, "classify_image", side_effect=slow), \
+         patch.object(redis_consumer, "INFERENCE_TIMEOUT_S", 0.1):
+        await redis_consumer.process_message({
+            "mediaId": "m4",
+            "storagePath": "media/slow.jpg",
+        })
+
+    sv.assert_called_once_with("m4", "pending", 0.0, None)
+
+
+@pytest.mark.asyncio
+async def test_process_message_download_error_marks_pending():
+    """Si le download S3 echoue, on doit marquer pending PAS approved."""
+    async def boom_download(_path, _dest):
+        raise IOError("s3 unreachable")
+
+    with patch.object(redis_consumer, "download_from_s3", new=boom_download), \
+         patch.object(redis_consumer, "send_verdict", new=AsyncMock()) as sv, \
+         patch.object(redis_consumer, "classify_image"):
+        await redis_consumer.process_message({
+            "mediaId": "m5",
+            "storagePath": "media/missing.jpg",
+        })
+
+    sv.assert_called_once_with("m5", "pending", 0.0, None)
