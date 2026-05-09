@@ -1,3 +1,4 @@
+import threading
 from unittest.mock import patch
 
 from src import inference
@@ -56,3 +57,28 @@ def test_classify_image_picks_highest_unsafe_score():
     assert result["decision"] == "rejected"
     assert result["category"] == "FEMALE_GENITALIA_EXPOSED"
     assert result["confidence"] == 0.9
+
+
+def test_load_model_loads_only_once_under_concurrent_calls():
+    """N threads qui appellent load_model en parallele ne doivent
+    instancier NudeDetector qu'une seule fois (pas de double-load)."""
+    inference.detector = None
+    call_count = 0
+
+    class FakeDetector:
+        def __init__(self):
+            nonlocal call_count
+            call_count += 1
+            # petite pause pour favoriser la collision entre threads
+            import time as _t
+            _t.sleep(0.05)
+
+    with patch.object(inference, "NudeDetector", FakeDetector):
+        threads = [threading.Thread(target=inference.load_model) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert call_count == 1
+    inference.detector = None

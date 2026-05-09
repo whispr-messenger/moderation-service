@@ -123,8 +123,12 @@ def test_moderate_image_rejects_svg(client):
     assert r.status_code == 415
 
 
-def test_moderate_image_returns_503_on_inference_timeout(monkeypatch):
-    """Si classify_image prend plus que MOD_INFERENCE_TIMEOUT_S -> 503."""
+def test_moderate_image_returns_pending_on_inference_timeout(monkeypatch):
+    """Si classify_image depasse MOD_INFERENCE_TIMEOUT_S -> 200 + decision=pending.
+
+    On ne renvoie pas 503 / fail-open : cohérent avec WHISPR-1357, on marque
+    pending pour que media-service re-classifie ou passe en review humaine.
+    """
     monkeypatch.setenv("MOD_INFERENCE_TIMEOUT_S", "0.05")
 
     import time
@@ -145,7 +149,11 @@ def test_moderate_image_returns_503_on_inference_timeout(monkeypatch):
                     "/moderate/image",
                     files={"file": ("a.png", _make_png_bytes(), "image/png")},
                 )
-    assert r.status_code == 503
+    assert r.status_code == 200
+    body = r.json()
+    assert body["decision"] == "pending"
+    assert body["confidence"] == 0.0
+    assert body["category"] is None
 
 
 def test_moderate_image_rejects_when_auth_header_wrong(auth_client):
