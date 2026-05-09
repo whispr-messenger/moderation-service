@@ -47,12 +47,13 @@ async def download_from_s3(storage_path: str, dest_path: str):
 async def send_verdict(media_id: str, decision: str, score: float, category: str | None):
     """Send moderation verdict back to media-service."""
     async with httpx.AsyncClient() as client:
-        await client.patch(
+        resp = await client.patch(
             f"{MEDIA_SERVICE_URL}/{media_id}/moderation",
             json={"status": decision, "score": score, "category": category},
             timeout=10.0,
         )
-    logger.info(f"Verdict sent for {media_id}: {decision}")
+        resp.raise_for_status()
+    logger.info("Verdict sent for %s: %s", media_id, decision)
 
 async def process_message(data: dict):
     """Process a single media.uploaded event."""
