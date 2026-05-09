@@ -1,8 +1,18 @@
+import importlib
 from io import BytesIO
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
+
+
+def _make_png_bytes(size=(8, 8), color=(255, 0, 0)) -> BytesIO:
+    """Genere un vrai PNG (passera la verif PIL)."""
+    buf = BytesIO()
+    Image.new("RGB", size, color).save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 
 @pytest.fixture
@@ -10,9 +20,24 @@ def client():
     # Import lazily so patches in tests can intercept NudeNet before lifespan runs
     with patch("src.inference.NudeDetector") as mock_detector:
         mock_detector.return_value.detect.return_value = []
-        from src.main import app
+        from src import main as main_module
 
-        with TestClient(app) as c:
+        importlib.reload(main_module)
+        with TestClient(main_module.app) as c:
+            yield c
+
+
+@pytest.fixture
+def auth_client(monkeypatch):
+    """Client avec MODERATION_REQUIRE_AUTH=true et un secret connu."""
+    monkeypatch.setenv("MODERATION_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("MODERATION_INTERNAL_SECRET", "s3cret-test")
+    with patch("src.inference.NudeDetector") as mock_detector:
+        mock_detector.return_value.detect.return_value = []
+        from src import main as main_module
+
+        importlib.reload(main_module)
+        with TestClient(main_module.app) as c:
             yield c
 
 
@@ -49,7 +74,7 @@ def test_moderate_image_rejects_non_image_content_type(client):
 
 
 def test_moderate_image_accepts_image_and_returns_decision(client):
-    fake_image = BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+    fake_image = _make_png_bytes()
     r = client.post(
         "/moderate/image",
         files={"file": ("a.png", fake_image, "image/png")},
@@ -58,3 +83,76 @@ def test_moderate_image_accepts_image_and_returns_decision(client):
     body = r.json()
     assert body["decision"] in {"approved", "rejected"}
     assert "confidence" in body
+
+
+def test_moderate_image_rejects_when_auth_required_without_header(auth_client):
+    fake_image = _make_png_bytes()
+    r = auth_client.post(
+        "/moderate/image",
+        files={"file": ("a.png", fake_image, "image/png")},
+    )
+    assert r.status_code == 401
+
+
+def test_moderate_image_accepts_when_auth_header_valid(auth_client):
+    fake_image = _make_png_bytes()
+    r = auth_client.post(
+        "/moderate/image",
+        files={"file": ("a.png", fake_image, "image/png")},
+        headers={"X-Internal-Secret": "s3cret-test"},
+    )
+    assert r.status_code == 200
+
+
+def test_moderate_image_rejects_malformed_image(client):
+    """Content-type image/png mais payload n'est pas une vraie image -> 415."""
+    r = client.post(
+        "/moderate/image",
+        files={"file": ("a.png", BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 32), "image/png")},
+    )
+    assert r.status_code == 415
+
+
+def test_moderate_image_rejects_svg(client):
+    """SVG n'est pas dans la whitelist -> 415."""
+    svg = BytesIO(b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>')
+    r = client.post(
+        "/moderate/image",
+        files={"file": ("a.svg", svg, "image/svg+xml")},
+    )
+    assert r.status_code == 415
+
+
+def test_moderate_image_returns_503_on_inference_timeout(monkeypatch):
+    """Si classify_image prend plus que MOD_INFERENCE_TIMEOUT_S -> 503."""
+    monkeypatch.setenv("MOD_INFERENCE_TIMEOUT_S", "0.05")
+
+    import time
+
+    def slow_classify(_):
+        time.sleep(0.5)
+        return {"decision": "approved", "confidence": 1.0, "category": None,
+                "all_detections": 0, "latency_ms": 500.0}
+
+    with patch("src.inference.NudeDetector") as mock_detector:
+        mock_detector.return_value.detect.return_value = []
+        from src import main as main_module
+
+        importlib.reload(main_module)
+        with patch.object(main_module, "classify_image", side_effect=slow_classify):
+            with TestClient(main_module.app) as c:
+                r = c.post(
+                    "/moderate/image",
+                    files={"file": ("a.png", _make_png_bytes(), "image/png")},
+                )
+    assert r.status_code == 503
+
+
+def test_moderate_image_rejects_when_auth_header_wrong(auth_client):
+    fake_image = _make_png_bytes()
+    r = auth_client.post(
+        "/moderate/image",
+        files={"file": ("a.png", fake_image, "image/png")},
+        headers={"X-Internal-Secret": "wrong"},
+    )
+    assert r.status_code == 401
