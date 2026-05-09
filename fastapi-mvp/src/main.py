@@ -30,6 +30,7 @@ ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 # le flag a true en preprod/prod)
 REQUIRE_AUTH = os.getenv("MODERATION_REQUIRE_AUTH", "false").lower() == "true"
 INTERNAL_SECRET = os.getenv("MODERATION_INTERNAL_SECRET")
+INFERENCE_TIMEOUT_S = float(os.getenv("MOD_INFERENCE_TIMEOUT_S", "30.0"))
 
 
 def verify_internal_secret(x_internal_secret: str | None = Header(default=None)):
@@ -131,9 +132,18 @@ async def moderate_image(request: Request, file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as tmp:
         tmp.write(content)
         tmp.flush()
-        # classify_image est CPU-bound : on l'exécute dans le thread pool
-        # pour ne pas bloquer l'event loop pendant l'inférence ML
-        result = await loop.run_in_executor(None, classify_image, tmp.name)
+        # classify_image est CPU-bound : on l'execute dans le thread pool
+        # pour ne pas bloquer l'event loop pendant l'inference ML.
+        # Le timeout protege contre une image piege qui ferait tourner le
+        # detecteur trop longtemps (DoS).
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, classify_image, tmp.name),
+                timeout=INFERENCE_TIMEOUT_S,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Inference timeout after %.1fs", INFERENCE_TIMEOUT_S)
+            raise HTTPException(503, "Inference timeout")
 
     return ModerationResult(**result)
 

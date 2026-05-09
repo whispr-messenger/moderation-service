@@ -123,6 +123,31 @@ def test_moderate_image_rejects_svg(client):
     assert r.status_code == 415
 
 
+def test_moderate_image_returns_503_on_inference_timeout(monkeypatch):
+    """Si classify_image prend plus que MOD_INFERENCE_TIMEOUT_S -> 503."""
+    monkeypatch.setenv("MOD_INFERENCE_TIMEOUT_S", "0.05")
+
+    import time
+
+    def slow_classify(_):
+        time.sleep(0.5)
+        return {"decision": "approved", "confidence": 1.0, "category": None,
+                "all_detections": 0, "latency_ms": 500.0}
+
+    with patch("src.inference.NudeDetector") as mock_detector:
+        mock_detector.return_value.detect.return_value = []
+        from src import main as main_module
+
+        importlib.reload(main_module)
+        with patch.object(main_module, "classify_image", side_effect=slow_classify):
+            with TestClient(main_module.app) as c:
+                r = c.post(
+                    "/moderate/image",
+                    files={"file": ("a.png", _make_png_bytes(), "image/png")},
+                )
+    assert r.status_code == 503
+
+
 def test_moderate_image_rejects_when_auth_header_wrong(auth_client):
     fake_image = _make_png_bytes()
     r = auth_client.post(
