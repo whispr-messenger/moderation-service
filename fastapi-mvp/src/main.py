@@ -71,13 +71,17 @@ async def moderate_image(request: Request, file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Only image files are supported")
 
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"File exceeds {MAX_UPLOAD_MB}MB limit")
+
+    loop = asyncio.get_event_loop()
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as tmp:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, f"File exceeds {MAX_UPLOAD_MB}MB limit")
         tmp.write(content)
         tmp.flush()
-        result = classify_image(tmp.name)
+        # classify_image est CPU-bound : on l'exécute dans le thread pool
+        # pour ne pas bloquer l'event loop pendant l'inférence ML
+        result = await loop.run_in_executor(None, classify_image, tmp.name)
 
     return ModerationResult(**result)
 
