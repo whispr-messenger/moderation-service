@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import os
 import secrets as pysecrets
@@ -6,6 +7,7 @@ import tempfile
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, status
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -20,6 +22,9 @@ logger = logging.getLogger("moderation")
 MAX_UPLOAD_MB = int(os.getenv("MOD_MAX_UPLOAD_MB", "10"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 RATE_LIMIT = os.getenv("MOD_RATE_LIMIT", "30/minute")
+# Whitelist de formats images supportes - SVG explicitement exclu (XSS / SSRF
+# via uri externes embarques)
+ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 # Feature flag pour gater l'auth interne pendant le rollout (le client
 # media-service doit etre adapte pour envoyer le header avant de basculer
 # le flag a true en preprod/prod)
@@ -108,6 +113,19 @@ async def moderate_image(request: Request, file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, f"File exceeds {MAX_UPLOAD_MB}MB limit")
+
+    # Le content-type seul est trompable (un attaquant peut envoyer un
+    # script avec content-type image/png). On verifie les magic bytes via
+    # PIL qui refuse aussi les payloads malformes.
+    try:
+        with Image.open(io.BytesIO(content)) as probe:
+            probe.verify()
+            img_format = probe.format
+    except (UnidentifiedImageError, Exception) as exc:
+        logger.warning("Image upload refused (verify failed): %s", exc)
+        raise HTTPException(415, "Fichier image invalide")
+    if img_format not in ALLOWED_IMAGE_FORMATS:
+        raise HTTPException(415, f"Format {img_format} non supporte")
 
     loop = asyncio.get_event_loop()
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as tmp:
