@@ -18,7 +18,11 @@ ENV PYTHONUNBUFFERED=1 \
     MOD_BLOCK_THRESHOLD=0.6 \
     MOD_MAX_UPLOAD_MB=10 \
     MOD_RATE_LIMIT=30/minute \
+    MODERATION_REQUIRE_AUTH=false \
     HOME=/home/appuser
+
+# MODERATION_INTERNAL_SECRET doit etre injecte au runtime quand
+# MODERATION_REQUIRE_AUTH=true (cf. secret moderation-service-env en preprod)
 
 USER appuser
 
