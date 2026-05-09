@@ -122,7 +122,7 @@ async def moderate_image(request: Request, file: UploadFile = File(...)):
         with Image.open(io.BytesIO(content)) as probe:
             probe.verify()
             img_format = probe.format
-    except (UnidentifiedImageError, Exception) as exc:
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
         logger.warning("Image upload refused (verify failed): %s", exc)
         raise HTTPException(415, "Fichier image invalide")
     if img_format not in ALLOWED_IMAGE_FORMATS:
