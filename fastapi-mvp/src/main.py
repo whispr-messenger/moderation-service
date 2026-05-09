@@ -143,7 +143,15 @@ async def moderate_image(request: Request, file: UploadFile = File(...)):
             )
         except asyncio.TimeoutError:
             logger.warning("Inference timeout after %.1fs", INFERENCE_TIMEOUT_S)
-            raise HTTPException(503, "Inference timeout")
+            # cohérent avec WHISPR-1357 : pas de fail-open, on renvoie pending
+            # pour que media-service marque le media a re-classifier ou
+            # passer en review humaine.
+            return ModerationResult(
+                decision="pending",
+                confidence=0.0,
+                category=None,
+                all_detections=0,
+            )
 
     return ModerationResult(**result)
 

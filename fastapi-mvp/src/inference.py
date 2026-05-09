@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 
 from nudenet import NudeDetector
@@ -20,15 +21,24 @@ UNSAFE_CATEGORIES = {
 BLOCK_THRESHOLD = float(os.getenv("MOD_BLOCK_THRESHOLD", "0.6"))
 
 detector = None
+# Lock pour eviter le double-load si deux requetes arrivent au cold-start
+# avant que le lifespan ait fini d'instancier NudeDetector. Sans ca, on
+# peut charger le modele 2x (waste memoire) ou laisser un detector partiel.
+_load_lock = threading.Lock()
 
 
 def load_model():
     global detector
-    if detector is None:
-        logger.info("Loading NudeNet model...")
-        t0 = time.perf_counter()
-        detector = NudeDetector()
-        logger.info("NudeNet model loaded in %.2fs", time.perf_counter() - t0)
+    # double-checked locking : verif rapide sans lock pour le hot path
+    if detector is not None:
+        return detector
+    with _load_lock:
+        # re-verifier sous lock au cas ou un autre thread a charge entre temps
+        if detector is None:
+            logger.info("Loading NudeNet model...")
+            t0 = time.perf_counter()
+            detector = NudeDetector()
+            logger.info("NudeNet model loaded in %.2fs", time.perf_counter() - t0)
     return detector
 
 
