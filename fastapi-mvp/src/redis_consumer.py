@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import tempfile
 import logging
 import redis.asyncio as redis
@@ -11,6 +12,22 @@ from botocore.client import Config as BotoConfig
 from .inference import classify_image
 
 logger = logging.getLogger("moderation")
+
+# Allowlist pour le storage_path recu de Redis : caracteres safe pour S3 keys,
+# pas de "..", pas de scheme, pas de slash double. La regex bloque aussi les
+# tentatives d'exfiltration via des chemins absolus ou exotiques.
+SAFE_STORAGE_PATH = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_.-]{0,511}$")
+
+
+def is_safe_storage_path(path: str) -> bool:
+    """Verifie qu'un storage_path est safe a passer a S3."""
+    if not path or not SAFE_STORAGE_PATH.match(path):
+        return False
+    # ne pas oublier que la regex laisse passer "a/../b" si on n'exclut pas
+    # explicitement la sequence ".."
+    if ".." in path:
+        return False
+    return True
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:3012/media/v1")
@@ -47,12 +64,13 @@ async def download_from_s3(storage_path: str, dest_path: str):
 async def send_verdict(media_id: str, decision: str, score: float, category: str | None):
     """Send moderation verdict back to media-service."""
     async with httpx.AsyncClient() as client:
-        await client.patch(
+        resp = await client.patch(
             f"{MEDIA_SERVICE_URL}/{media_id}/moderation",
             json={"status": decision, "score": score, "category": category},
             timeout=10.0,
         )
-    logger.info(f"Verdict sent for {media_id}: {decision}")
+        resp.raise_for_status()
+    logger.info("Verdict sent for %s: %s", media_id, decision)
 
 async def process_message(data: dict):
     """Process a single media.uploaded event."""
@@ -61,6 +79,13 @@ async def process_message(data: dict):
 
     if not media_id or not storage_path:
         logger.warning(f"Invalid event data: {data}")
+        return
+
+    if not is_safe_storage_path(storage_path):
+        logger.error(
+            "Rejected unsafe storage_path media_id=%s path=%r",
+            media_id, storage_path,
+        )
         return
 
     logger.info(f"Processing media {media_id} at {storage_path}")
