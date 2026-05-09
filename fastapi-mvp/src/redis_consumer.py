@@ -35,6 +35,9 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "whispr-media")
+# Meme timeout que la route HTTP /moderate/image : protege contre une image
+# piege qui ferait crasher ou tourner NudeNet trop longtemps (DoS / fail-open).
+INFERENCE_TIMEOUT_S = float(os.getenv("MOD_INFERENCE_TIMEOUT_S", "30.0"))
 
 _s3_client = None
 
@@ -93,12 +96,27 @@ async def process_message(data: dict):
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as tmp:
         try:
             await download_from_s3(storage_path, tmp.name)
-            result = classify_image(tmp.name)
+            # classify_image est CPU-bound : on l'execute dans le thread pool
+            # pour ne pas bloquer l'event loop pendant l'inference ML.
+            # Le timeout protege contre une image piege qui ferait tourner le
+            # detecteur trop longtemps (DoS).
+            loop = asyncio.get_event_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, classify_image, tmp.name),
+                timeout=INFERENCE_TIMEOUT_S,
+            )
             await send_verdict(media_id, result["decision"], result["confidence"], result["category"])
+        except asyncio.TimeoutError:
+            logger.error(
+                "Inference timeout for media_id=%s after %.1fs, marking pending",
+                media_id, INFERENCE_TIMEOUT_S,
+            )
+            # ne pas oublier : auto-approuver sur erreur = bypass modération.
+            # On marque pending pour re-classification ou intervention humaine.
+            await send_verdict(media_id, "pending", 0.0, None)
         except Exception as e:
             logger.error(f"Moderation failed for {media_id}: {e}")
-            # On error, approve to avoid blocking legitimate content
-            await send_verdict(media_id, "approved", 0.0, None)
+            await send_verdict(media_id, "pending", 0.0, None)
 
 async def listen():
     """Listen for media.uploaded events on Redis pub/sub."""
