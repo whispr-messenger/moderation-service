@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import tempfile
 import logging
 import redis.asyncio as redis
@@ -11,6 +12,22 @@ from botocore.client import Config as BotoConfig
 from .inference import classify_image
 
 logger = logging.getLogger("moderation")
+
+# Allowlist pour le storage_path recu de Redis : caracteres safe pour S3 keys,
+# pas de "..", pas de scheme, pas de slash double. La regex bloque aussi les
+# tentatives d'exfiltration via des chemins absolus ou exotiques.
+SAFE_STORAGE_PATH = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9/_.-]{0,511}$")
+
+
+def is_safe_storage_path(path: str) -> bool:
+    """Verifie qu'un storage_path est safe a passer a S3."""
+    if not path or not SAFE_STORAGE_PATH.match(path):
+        return False
+    # ne pas oublier que la regex laisse passer "a/../b" si on n'exclut pas
+    # explicitement la sequence ".."
+    if ".." in path:
+        return False
+    return True
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 MEDIA_SERVICE_URL = os.getenv("MEDIA_SERVICE_URL", "http://localhost:3012/media/v1")
@@ -62,6 +79,13 @@ async def process_message(data: dict):
 
     if not media_id or not storage_path:
         logger.warning(f"Invalid event data: {data}")
+        return
+
+    if not is_safe_storage_path(storage_path):
+        logger.error(
+            "Rejected unsafe storage_path media_id=%s path=%r",
+            media_id, storage_path,
+        )
         return
 
     logger.info(f"Processing media {media_id} at {storage_path}")
